@@ -6,17 +6,20 @@ mod tools;
 enum FuncOptions {
     FibGen = 0,
     TempConv = 1,
+    GuessGame = 2,
 }
 
-const FUNCTION_ARR: [(u8, &str); 3] = [
+const FUNCTION_ARR: [(u8, &str); 4] = [
     (0, "fibonacci generator"),
     (1, "temperature converter"),
+    (2, "guessing game :0"),
     (123, "exit")
 ];
 
 /// a function to call the functions given by the accompanying data and modules
 pub fn caller() -> () {
     use tools::{fibonacci_generator, temp_converter};
+    use game_of_guess::guessing_game;
     loop {
         println!("Please enter the index of the function to run:");
 
@@ -33,11 +36,12 @@ pub fn caller() -> () {
         let fn_idx = match input.parse().unwrap_or(0) {
             0 => FuncOptions::FibGen,
             1 => FuncOptions::TempConv,
+            2 => FuncOptions::GuessGame,
             123 => {
                 println!("very well, exiting program...");
                 return;
             }
-            _ => FuncOptions::TempConv
+            _ => FuncOptions::GuessGame
         };
         input.clear();
         println!();
@@ -46,6 +50,7 @@ pub fn caller() -> () {
         match fn_idx {
             FuncOptions::FibGen => print!("Please enter a fibonacci index: "),
             FuncOptions::TempConv => print!("Please enter a temperature: "),
+            FuncOptions::GuessGame => print!("Please pick a game style: ")
         }
         let _ = std::io::Write::flush(&mut std::io::stdout());
         /* 
@@ -69,7 +74,11 @@ pub fn caller() -> () {
                     Ok(value) => println!("temp: {}", value),
                     Err(err) => println!("Error: {}", err),
                 }
-            }
+            },
+            FuncOptions::GuessGame => {
+                let arg: u8 = input.trim().parse().expect("oi");
+                guessing_game(arg);
+            },
         }
         println!();
     }

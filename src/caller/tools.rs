@@ -4,7 +4,7 @@ pub fn temp_formatter(temp: &str) -> Result<(bool, String), String>{
   }
   
   use regex::Regex;
-  let Ok(valid_temp) = Regex::new(r"[0-9]+°?[cCfF]") else {
+  let Ok(valid_temp) = Regex::new(r"^-?[0-9]+(\.[0-9]+)?°?[cCfF]$") else {
       return Err(String::from("Regex failed to regex"));
   };
 
@@ -13,14 +13,19 @@ pub fn temp_formatter(temp: &str) -> Result<(bool, String), String>{
   }
 
   let (is_celsius, suffix_len): (bool, usize) = {
-      let rev_temp: Vec<char> = temp.chars().rev().take(2).collect();
+      let rev_temp: Vec<char> = temp.chars()
+                                    .rev()
+                                    .take(2)
+                                    .map(|val| val.to_ascii_uppercase())
+                                    .collect();
+
       match rev_temp[..] {
           ['C', '°'] => (true, 2),
           ['F', '°'] => (false, 2),
           ['C', sth] if sth.is_numeric() => (true, 1),
           ['F', sth] if sth.is_numeric() => (false, 1),
           _ => return Err(format!(
-              "{temp} is somehow not in valid temperature format"
+              "Somehow, {temp} is not in valid temperature format"
           )),
       }
   };
@@ -60,15 +65,23 @@ pub fn temp_converter(temp: &str) -> Result<String, String> {
 
 /// a function that generates values of the fibonacci sequence\
 /// yes, this is 0-indexed :p
-pub fn fibonacci_generator(end_idx: u128) -> u128 {
-  #[inline(always)]
-  fn fib(prev_prev: u128, prev: u128) -> u128 { prev_prev + prev }
+pub fn fibonacci_generator(end_idx: u8) -> Result<u128, String> {
+    if end_idx > 186 {
+        return Err(String::from("Output is too large for u128 D:"));
+    }
 
-  let mut prev_fib = 0;
-  let mut cur_fib = 1;
-  for _ in 1..end_idx {
-      let next_fib = fib(prev_fib, cur_fib);
-      (prev_fib, cur_fib) = (cur_fib, next_fib);
-  }
-  return cur_fib;
+    #[inline(always)]
+    fn fib(prev_prev: u128, prev: u128) -> Option<u128> { 
+        prev_prev.checked_add(prev)
+    }
+
+    let mut prev_fib = 0;
+    let mut cur_fib = 1;
+    for _ in 1..end_idx {
+        let Some(next_fib) = fib(prev_fib, cur_fib) else {
+            return Err(String::from("Output is too large for u128 D:"));
+        };
+        (prev_fib, cur_fib) = (cur_fib, next_fib);
+    }
+    return Ok(cur_fib);
 }

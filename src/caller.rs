@@ -48,7 +48,7 @@ pub fn caller() -> () {
 
         // Pre-amble for user
         match fn_idx {
-            FuncOptions::FibGen => print!("Please enter a fibonacci index: "),
+            FuncOptions::FibGen => print!("Please enter a fibonacci index (u8): "),
             FuncOptions::TempConv => print!("Please enter a temperature: "),
             FuncOptions::GuessGame => print!("Please pick a game style: ")
         }
@@ -65,14 +65,20 @@ pub fn caller() -> () {
         std::io::stdin().read_line(&mut input).expect("hmmm");
         match fn_idx {
             FuncOptions::FibGen => {
-                let arg: u128 = input.trim().parse().expect("oi");
-                println!("value: {}", fibonacci_generator(arg));
+                let Ok(arg) = input.trim().parse::<u8>() else {
+                    eprintln!("That's not a u8 integer :(");
+                    continue;
+                };
+                match fibonacci_generator(arg) {
+                    Ok(value) => println!("value: {}", value),
+                    Err(err) => eprintln!("Error: {}", err),
+                }
             },
             FuncOptions::TempConv => {
                 let arg = input.trim();
                 match temp_converter(arg) {
                     Ok(value) => println!("temp: {}", value),
-                    Err(err) => println!("Error: {}", err),
+                    Err(err) => eprintln!("Error: {}", err),
                 }
             },
             FuncOptions::GuessGame => {

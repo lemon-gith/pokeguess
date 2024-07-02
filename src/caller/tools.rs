@@ -62,15 +62,30 @@ fn temp_converter(temp: &str) -> Result<String, String> {
   return Ok(temp_string);
 }
 
+pub fn temp_conv_main() {
+    print!("Please enter a temperature: ");
+    let _ = Write::flush(&mut stdout());
+
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input).expect("Umm, no?");
+
+    let arg = input.trim();
+    match temp_converter(arg) {
+        Ok(value) => println!("temp: {}", value),
+        Err(err) => eprintln!("Error: {}", err),
+    }
+}
+
+
 /// a function that generates values of the fibonacci sequence\
 /// yes, this is 0-indexed :p
-pub fn fibonacci_generator(end_idx: u8) -> Result<u128, String> {
+fn fibonacci_generator(end_idx: u8) -> Result<u128, String> {
     if end_idx > 186 {
-        return Err(String::from("Output is too large for u128 D:"));
+        return Err(String::from("Output is too large to fit in a u128 D:"));
     }
 
     #[inline(always)]
-    fn fib(prev_prev: u128, prev: u128) -> Option<u128> { 
+    fn fib(prev_prev: u128, prev: u128) -> Option<u128> {
         prev_prev.checked_add(prev)
     }
 
@@ -83,4 +98,28 @@ pub fn fibonacci_generator(end_idx: u8) -> Result<u128, String> {
         (prev_fib, cur_fib) = (cur_fib, next_fib);
     }
     return Ok(cur_fib);
+}
+
+pub fn fibonacci_main() {
+    print!("Please enter a fibonacci index (u8): ");
+    let _ = Write::flush(&mut stdout());
+    /*
+     * can flush stdout using above, since print! doesn't (println! does);
+     * my guess is, gets the flush fn from Write, applies to stdout stream
+     * ignoring returned Result,
+     * because consequence of not being flushed is a minor UX issue
+     */
+
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input).expect("Umm, no?");
+
+    let Ok(arg) = input.trim().parse::<u8>() else {
+        eprintln!("That's not a u8 integer :(");
+        return;
+    };
+
+    match fibonacci_generator(arg) {
+        Ok(value) => println!("value: {}", value),
+        Err(err) => eprintln!("Error: {}", err),
+    }
 }

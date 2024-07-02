@@ -3,23 +3,44 @@ mod game_of_guess;
 mod tools;
 
 
-enum FuncOptions {
-    FibGen = 0,
-    TempConv = 1,
-    GuessGame = 2,
+/// struct to hold hard-coded details about user options
+struct FunctionNames {
+    name: &'static str,
+    desc: &'static str,
+    main: fn() -> (),
 }
 
-const FUNCTION_ARR: [(u8, &str); 4] = [
-    (0, "fibonacci generator"),
-    (1, "temperature converter"),
-    (2, "guessing game :0"),
-    (123, "exit")
-];
-
 /// a function to call the functions given by the accompanying data and modules
-pub fn caller() -> () {
-    use tools::{fibonacci_generator, temp_converter};
-    use game_of_guess::guessing_game;
+pub fn caller() {
+    use std::collections::HashMap;
+    // Map from idx to details and caller for each user option
+    let fn_opts: HashMap<u8, FunctionNames> = HashMap::from([
+        (0, FunctionNames {
+            name: "Fibonacci Generator",
+            desc: "Generates values from the Fibonacci Sequence",
+            main: || tools::fibonacci_main(),
+        }),
+        (1, FunctionNames {
+            name: "Temperature Converter",
+            desc: "tool for converting between Celsius and Fahrenheit",
+            main: || tools::temp_conv_main(),
+        }),
+        (2, FunctionNames {
+            name: "Guessing Game",
+            desc: "pokemon-based guessing game :D",
+            main: || game_of_guess::guessing_game(),
+        }),
+        (123, FunctionNames {
+            name: "Exit",
+            desc: "exit this program",
+            main: || {
+                println!("okee, bye :D");
+                std::process::exit(0);
+            },
+        }),
+    ]);
+    // New things to be called can be added in here :p
+
     loop {
         println!("Please enter the index of the function to run:");
 

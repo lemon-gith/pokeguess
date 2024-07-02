@@ -54,61 +54,26 @@ pub fn caller() {
         // Get user to select a function
         let mut input = String::new();
         std::io::stdin().read_line(&mut input).expect("hmmm");
-        input = String::from(input.trim());
 
-        let fn_idx = match input.parse().unwrap_or(0) {
-            0 => FuncOptions::FibGen,
-            1 => FuncOptions::TempConv,
-            2 => FuncOptions::GuessGame,
-            123 => {
-                println!("very well, exiting program...");
-                return;
+        let fn_main: fn() -> () = {
+            let choice: u8 = {
+                input.trim()
+                     .parse()
+                     .unwrap_or_else(|invalid| {
+                        println!("invalid input: \"{}\"", invalid);
+                        println!("defaulting to option 2...");
+                        2
+                     })
+            };
+            if let Some(fn_struct) = fn_opts.get(&choice) {
+                fn_struct.main
+            } else {
+                || println!("That's not a valid option, please try again")
             }
-            _ => FuncOptions::GuessGame
         };
-        input.clear();
-        println!();
 
-        // Pre-amble for user
-        match fn_idx {
-            FuncOptions::FibGen => print!("Please enter a fibonacci index (u8): "),
-            FuncOptions::TempConv => print!("Please enter a temperature: "),
-            FuncOptions::GuessGame => print!("Please pick a game style: ")
-        }
-        let _ = std::io::Write::flush(&mut std::io::stdout());
-        /* 
-         * can flush stdout using above, since print! doesn't (println! does);
-         * my guess is, gets the flush fn from Write, applies to stdout stream
+        fn_main();
 
-         * ignoring returned Result,
-         * because consequence of not being flushed is a minor UX issue
-         */
-
-        // Function calling
-        std::io::stdin().read_line(&mut input).expect("hmmm");
-        match fn_idx {
-            FuncOptions::FibGen => {
-                let Ok(arg) = input.trim().parse::<u8>() else {
-                    eprintln!("That's not a u8 integer :(");
-                    continue;
-                };
-                match fibonacci_generator(arg) {
-                    Ok(value) => println!("value: {}", value),
-                    Err(err) => eprintln!("Error: {}", err),
-                }
-            },
-            FuncOptions::TempConv => {
-                let arg = input.trim();
-                match temp_converter(arg) {
-                    Ok(value) => println!("temp: {}", value),
-                    Err(err) => eprintln!("Error: {}", err),
-                }
-            },
-            FuncOptions::GuessGame => {
-                let arg: u8 = input.trim().parse().expect("oi");
-                guessing_game(arg);
-            },
-        }
         println!();
     }
 }

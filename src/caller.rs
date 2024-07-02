@@ -45,8 +45,10 @@ pub fn caller() {
         println!("Please enter the index of the function to run:");
 
         // display function options
-        for (idx, fn_name) in FUNCTION_ARR {
-            println!("{:<3}: {}", idx, fn_name);
+        for (idx, fn_name) in &fn_opts {
+            // Note: these numbers must be adjusted for aesthetics
+            // for any changes to fn_opts
+            println!("{:>3}: {:>22} - {}", idx, fn_name.name, fn_name.desc);
         }
 
         // Get user to select a function

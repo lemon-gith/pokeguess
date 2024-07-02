@@ -1,8 +1,11 @@
-pub fn temp_formatter(temp: &str) -> Result<(bool, String), String>{
+use std::io::{Write, stdout};
+
+
+fn temp_formatter(temp: &str) -> Result<(bool, String), String>{
   if temp.is_empty(){
       return Err(String::from("oi, this is empty >:("));
   }
-  
+
   use regex::Regex;
   let Ok(valid_temp) = Regex::new(r"^-?[0-9]+(\.[0-9]+)?°?[cCfF]$") else {
       return Err(String::from("Regex failed to regex"));
@@ -40,12 +43,8 @@ pub fn temp_formatter(temp: &str) -> Result<(bool, String), String>{
   return Ok((is_celsius, temp_str));
 }
 
-
-pub fn temp_converter(temp: &str) -> Result<String, String> {
-  let (is_celsius, temp_val) = match temp_formatter(temp) {
-      Ok(vals) => vals,
-      Err(err) => return Err(err),
-  };
+fn temp_converter(temp: &str) -> Result<String, String> {
+  let (is_celsius, temp_val) = temp_formatter(temp)?;
 
   // safe to unwrap because of temp_formatter
   let temp_val: f64 = temp_val.parse().unwrap();

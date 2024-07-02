@@ -74,6 +74,7 @@ pub fn caller() {
 
         fn_main();
 
+        std::thread::sleep(std::time::Duration::from_millis(1200));
         println!();
     }
 }

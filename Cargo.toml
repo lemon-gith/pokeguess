@@ -1,0 +1,9 @@
+[package]
+name = "pokeguess"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# this is the development version of Yew
+yew = { git = "https://github.com/yewstack/yew/", features = ["csr"] }
+# rustemon = "4.5.0"

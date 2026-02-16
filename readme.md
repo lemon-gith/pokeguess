@@ -1,3 +1,16 @@
+# Pokeguess
+
+This app started as the Rust Book's [Guessing Game](https://doc.rust-lang.org/book/ch02-00-guessing-game-tutorial.html) exercise. However, I discovered the [PokeAPI](https://pokeapi.co/) and [Rustemon](https://github.com/mlemesle/rustemon) soon after, which led me to design this, much more complicated, guessing game.
+
+Motivated by the idea that I could make it public and host it on GitHub Pages, I've chosen to make it a Client-Side Rendered webapp, that runs entirely within the browser. And motivated by this being a Rust exercise, I decided to try out the [Yew](https://yew.rs/) front-end framework, too.
+
+## URL
+
+>[!CAUTION]
+> The linked URL `pokeguess.piercew.xyz/` is currently dead, because I have not set up the GitHub Actions to build the webapp, nor configured my DNS to the output of that build.
+
+## Notes
+
 ```rs
 // OMG, USE RUSTEMON TO MAKE A POKEMON GUESSING GAME
 // Start off with their description or sprite shadow and have them guess the pokemon

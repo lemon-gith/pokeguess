@@ -11,7 +11,8 @@ struct App {
 
 enum MenuOptions {
     StartGame,
-    Settings
+    GameOptions,  // game-specific options, e.g. gens, difficulty, etc.
+    Settings  // overall app settings
 }
 
 struct StartMenu {

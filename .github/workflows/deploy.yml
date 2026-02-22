@@ -1,0 +1,59 @@
+name: Deploy wasmapp
+# Adapted from https://github.com/mathiasyde/jigsaw/blob/e065f22c8bdbc3a839ac72b79e36fa3d7d3d8f9d/.github/workflows/deploy.yml
+# Accessed on 20260222
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Restore cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/git
+            ~/.cargo/registry
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Trunk
+        uses: jetli/trunk-action@v0.4.0
+        with:
+          # Optional version of trunk to install(eg. 'v0.16.0', 'latest')
+          version: "latest"
+      - name: Add WASM build target
+        run: |
+          rustup target add wasm32-unknown-unknown
+      - name: Run trunk build
+        run: RUSTFLAGS='--cfg getrandom_backend="wasm_js"' trunk build --public-url "/jigsaw" --release
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "./dist"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -5,10 +5,8 @@
         <title>PokéGuess</title>
 
         <!-- Tailwind CSS -->
-        <link
-          href="https://unpkg.com/tailwindcss@1.9.6/dist/tailwind.min.css"
-          rel="stylesheet"
-        >
+        <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4">
+        </script>
 
         <!-- Icons -->
         <!--
@@ -43,5 +41,20 @@
         <meta property="og:locale" content="en_GB" />
         <meta property="og:url" content="https://pokeguess.piercew.xyz" />
     </head>
-    <body></body>
+    <style>
+        /* write bg styling directly in here, for better readability */
+        body {
+            /* is favicon-96x96, but with 20px padding on all sides */
+            background-image: url(./img/misc/bg_pokeball.png);
+            background-repeat: repeat;
+            background-position: center;
+            background-size: 100px;
+        }
+        @media screen and (max-width: 600px) {
+            body {
+                background-size: 40px;
+            }
+        }
+    </style>
+    <body class="bg-blue-300 grid h-screen w-screen place-items-center"></body>
 </html>

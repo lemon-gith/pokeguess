@@ -1,5 +1,6 @@
 use yew::prelude::*;
 
+
 enum Msg {
     AddOne,
 }
@@ -56,20 +57,18 @@ impl Component for App {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        let outline = "shadow-lg outline outline-black/5 dark:bg-slate-800 dark:shadow-none dark:-outline-offset-1 dark:outline-white/10";
+        let outline = "shadow-lg outline outline-black/5 dark:shadow-none dark:-outline-offset-1 dark:outline-white/10";
 
         html! {
-            <div class={"bg-blue-700 grid h-screen place-items-center absolute inset-0 size-32 box-border ".to_owned() + outline}>
-                <div style="height:75%" class={"bg-green-700 flex flex-col items-center justify-center gap-y-5 size-64 box-border h-3/4 w-3/4 p-6 rounded-xl ".to_owned() + outline}>
-                    <button class={"bg-white p-6 rounded-xl ".to_owned() + outline}
-                        onclick={ctx.link().callback(|_| Msg::AddOne)}
-                    >
-                        { "+1" }
-                    </button>
-                    <p class={"bg-white p-6 max-w-sm rounded-xl ".to_owned() + outline}>
-                        { self.value }
-                    </p>
-                </div>
+            <div class={"bg-gray-500 flex flex-col items-center justify-center gap-y-5 size-64 box-border md:w-3/4 w-5/6 md:h-3/4 h-11/12 p-6 rounded-xl ".to_owned() + outline}>
+                <button class={"bg-white p-6 rounded-xl ".to_owned() + outline}
+                    onclick={ctx.link().callback(|_| Msg::AddOne)}
+                >
+                    { "+ 1" }
+                </button>
+                <p class={"bg-white p-6 max-w-sm rounded-xl ".to_owned() + outline}>
+                    { self.value }
+                </p>
             </div>
         }
     }

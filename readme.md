@@ -4,10 +4,13 @@ This app started as the Rust Book's [Guessing Game](https://doc.rust-lang.org/bo
 
 Motivated by the idea that I could make it public and host it on GitHub Pages, I've chosen to make it a Client-Side Rendered webapp, that runs entirely within the browser. And motivated by this being a Rust exercise, I decided to try out the [Yew](https://yew.rs/) front-end framework, too.
 
-## URL
+## URL & Hosting
 
->[!CAUTION]
-> The linked URL `pokeguess.piercew.xyz/` is currently dead, because I have not set up the GitHub Actions to build the webapp, nor configured my DNS to the output of that build.
+A continuously deployed version of this game can be found at my subdomain: [`pokeguess.piercew.xyz`](https://pokeguess.piercew.xyz).
+
+This is hostly entirely on GitHub Pages because the webpage itself is completely static and pre-compiled (via GitHub Actions). All interactivity and game management happens on the client-side using [CSR](https://developer.mozilla.org/en-US/docs/Glossary/CSR), using some tricks to handle persistence (though, not as well as a server would), with only the static pages and codebase being rendered on GitHub's servers.
+
+This also means that the user is in charge of rate-limiting themselves on PokeAPI calls. This should not be a problem for expected usage (just playing the game). There is [no official rate limit](https://docs.airbyte.com/integrations/sources/pokeapi#rate-limiting--performance-considerations-airbyte-open-source), but please don't automate or flood my app with requests because this would indirectly do the same (if not worse) for the PokeAPI.
 
 ## Notes
 
@@ -47,3 +50,7 @@ pub fn guessing_game() {
   println!("You chose game {game_chosen}");
 }
 ```
+
+### App Background
+
+I didn't know this, but apparently SVG isn't supported for use in CSS properties such as `background-image`. [This forum](https://bugs.webkit.org/show_bug.cgi?id=91790) discusses this in more detail.

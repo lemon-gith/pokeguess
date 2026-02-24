@@ -61,10 +61,16 @@ impl Component for App {
 
         html! {
             <div class={"bg-gray-500 flex flex-col items-center justify-center gap-y-5 size-64 box-border md:w-3/4 w-5/6 md:h-3/4 h-11/12 p-6 rounded-xl ".to_owned() + outline}>
-                <button class={"bg-white p-6 rounded-xl ".to_owned() + outline}
+                <button class={"bg-white p-2 rounded-xl cursor-pointer ".to_owned() + outline}
                     onclick={ctx.link().callback(|_| Msg::AddOne)}
                 >
-                    { "+ 1" }
+                    <img
+                        src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/132.png"
+                        alt="ditto" style="width: 100px"
+                    />
+                    <figcaption>
+                        {"Click Me"}
+                    </figcaption>
                 </button>
                 <p class={"bg-white p-6 max-w-sm rounded-xl ".to_owned() + outline}>
                     { self.value }

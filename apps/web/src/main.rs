@@ -1,6 +1,5 @@
 use yew::prelude::*;
 
-
 enum Msg {
     AddOne,
 }
@@ -12,8 +11,8 @@ struct App {
 
 enum MenuOptions {
     StartGame,
-    GameOptions,  // game-specific options, e.g. gens, difficulty, etc.
-    Settings  // overall app settings
+    GameOptions, // game-specific options, e.g. gens, difficulty, etc.
+    Settings,    // overall app settings
 }
 
 struct StartMenu {

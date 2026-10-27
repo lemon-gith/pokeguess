@@ -1,0 +1,8 @@
+[package]
+name = "pokeguess"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+yew.workspace = true

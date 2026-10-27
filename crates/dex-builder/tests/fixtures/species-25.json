@@ -1,0 +1,211 @@
+{
+  "id": 25,
+  "name": "pikachu",
+  "generation": {
+    "name": "generation-i",
+    "url": "/api/v2/generation/1/"
+  },
+  "color": {
+    "name": "yellow",
+    "url": "/api/v2/pokemon-color/10/"
+  },
+  "shape": {
+    "name": "quadruped",
+    "url": "/api/v2/pokemon-shape/8/"
+  },
+  "habitat": {
+    "name": "forest",
+    "url": "/api/v2/pokemon-habitat/2/"
+  },
+  "is_baby": false,
+  "is_legendary": false,
+  "is_mythical": false,
+  "names": [
+    {
+      "name": "Pikachu",
+      "language": {
+        "name": "en",
+        "url": "/api/v2/language/9/"
+      }
+    },
+    {
+      "name": "ピカチュウ",
+      "language": {
+        "name": "ja",
+        "url": "/api/v2/language/11/"
+      }
+    }
+  ],
+  "genera": [
+    {
+      "genus": "Mouse Pokémon",
+      "language": {
+        "name": "en",
+        "url": "/api/v2/language/9/"
+      }
+    },
+    {
+      "genus": "ねずみポケモン",
+      "language": {
+        "name": "ja",
+        "url": "/api/v2/language/11/"
+      }
+    }
+  ],
+  "flavor_text_entries": [
+    {
+      "flavor_text": "When several of\nthese POKéMON\ngather, their\felectricity could\nbuild and cause\nlightning storms.",
+      "language": {
+        "name": "en",
+        "url": "/api/v2/language/9/"
+      },
+      "version": {
+        "name": "red",
+        "url": "/api/v2/version/1/"
+      }
+    },
+    {
+      "flavor_text": "Les Pikachu se disent bonjour en se frottant\nla queue et en y faisant passer du courant\nélectrique.",
+      "language": {
+        "name": "fr",
+        "url": "/api/v2/language/5/"
+      },
+      "version": {
+        "name": "shield",
+        "url": "/api/v2/version/34/"
+      }
+    },
+    {
+      "flavor_text": "Possesses cheek sacs in which it stores electricity. This clever\nforest-dweller roasts tough berries with an electric shock before\nconsuming them.",
+      "language": {
+        "name": "en",
+        "url": "/api/v2/language/9/"
+      },
+      "version": {
+        "name": "legends-arceus",
+        "url": "/api/v2/version/39/"
+      }
+    }
+  ],
+  "varieties": [
+    {
+      "is_default": true,
+      "pokemon": {
+        "name": "pikachu",
+        "url": "/api/v2/pokemon/25/"
+      }
+    },
+    {
+      "is_default": false,
+      "pokemon": {
+        "name": "pikachu-rock-star",
+        "url": "/api/v2/pokemon/10080/"
+      }
+    },
+    {
+      "is_default": false,
+      "pokemon": {
+        "name": "pikachu-belle",
+        "url": "/api/v2/pokemon/10081/"
+      }
+    },
+    {
+      "is_default": false,
+      "pokemon": {
+        "name": "pikachu-pop-star",
+        "url": "/api/v2/pokemon/10082/"
+      }
+    },
+    {
+      "is_default": false,
+      "pokemon": {
+        "name": "pikachu-phd",
+        "url": "/api/v2/pokemon/10083/"
+      }
+    },
+    {
+      "is_default": false,
+      "pokemon": {
+        "name": "pikachu-libre",
+        "url": "/api/v2/pokemon/10084/"
+      }
+    },
+    {
+      "is_default": false,
+      "pokemon": {
+        "name": "pikachu-cosplay",
+        "url": "/api/v2/pokemon/10085/"
+      }
+    },
+    {
+      "is_default": false,
+      "pokemon": {
+        "name": "pikachu-original-cap",
+        "url": "/api/v2/pokemon/10094/"
+      }
+    },
+    {
+      "is_default": false,
+      "pokemon": {
+        "name": "pikachu-hoenn-cap",
+        "url": "/api/v2/pokemon/10095/"
+      }
+    },
+    {
+      "is_default": false,
+      "pokemon": {
+        "name": "pikachu-sinnoh-cap",
+        "url": "/api/v2/pokemon/10096/"
+      }
+    },
+    {
+      "is_default": false,
+      "pokemon": {
+        "name": "pikachu-unova-cap",
+        "url": "/api/v2/pokemon/10097/"
+      }
+    },
+    {
+      "is_default": false,
+      "pokemon": {
+        "name": "pikachu-kalos-cap",
+        "url": "/api/v2/pokemon/10098/"
+      }
+    },
+    {
+      "is_default": false,
+      "pokemon": {
+        "name": "pikachu-alola-cap",
+        "url": "/api/v2/pokemon/10099/"
+      }
+    },
+    {
+      "is_default": false,
+      "pokemon": {
+        "name": "pikachu-partner-cap",
+        "url": "/api/v2/pokemon/10148/"
+      }
+    },
+    {
+      "is_default": false,
+      "pokemon": {
+        "name": "pikachu-starter",
+        "url": "/api/v2/pokemon/10158/"
+      }
+    },
+    {
+      "is_default": false,
+      "pokemon": {
+        "name": "pikachu-world-cap",
+        "url": "/api/v2/pokemon/10160/"
+      }
+    },
+    {
+      "is_default": false,
+      "pokemon": {
+        "name": "pikachu-gmax",
+        "url": "/api/v2/pokemon/10199/"
+      }
+    }
+  ]
+}

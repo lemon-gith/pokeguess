@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "apps/web",
+    "apps/user",
     "crates/shared",
     "crates/pokeapi",
     "crates/dex-builder",

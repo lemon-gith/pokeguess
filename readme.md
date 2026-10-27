@@ -19,16 +19,14 @@ This repo is a Cargo workspace:
 ```
 apps/
   web/            # the Yew front-end, built with Trunk and deployed to GitHub Pages
+  user/           # Vercel functions (Rust) for accounts, top runs and preferences
 crates/
   shared/         # types and game logic shared between the front-end and the API
   pokeapi/        # a small, typed PokeAPI wrapper
   dex-builder/    # builds pokedex.json, and checks monthly for PokeAPI updates
 ```
 
-Two more apps will join these later:
-
-- `apps/api`: a Cloudflare Worker (Rust) that caches PokeAPI responses, served at `api.pokeguess.piercew.xyz`
-- `apps/user`: Vercel functions (Rust) for accounts, top runs and preferences, served at `user.pokeguess.piercew.xyz`
+`apps/user` will be served at `user.pokeguess.piercew.xyz`. A Cloudflare Worker (Rust) that caches PokeAPI responses will join as `apps/api`, served at `api.pokeguess.piercew.xyz`.
 
 ### Running Locally
 

@@ -3,7 +3,10 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod language;
 pub mod pokedex;
+
+pub use language::Language;
 
 /// Response body of the user service's health endpoint.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -3,22 +3,26 @@
 use anyhow::{Context, Result, anyhow};
 use pokeapi::{Pokemon, PokemonSpecies, resource_id};
 use regex::Regex;
+use shared::Language;
 use shared::pokedex::{BaseStats, PokedexEntry, REDACTED_NAME};
 
-const LANGUAGE: &str = "en";
-
-pub fn entry(species: &PokemonSpecies, pokemon: &Pokemon) -> Result<PokedexEntry> {
+/// Builds an entry with its text (name, genus, flavour text) in `language`.
+pub fn entry(
+    species: &PokemonSpecies,
+    pokemon: &Pokemon,
+    language: Language,
+) -> Result<PokedexEntry> {
     let display_name = species
         .names
         .iter()
-        .find(|n| n.language.name == LANGUAGE)
+        .find(|n| n.language.name == language.code())
         .map_or_else(|| species.name.clone(), |n| n.name.clone());
     let genus = species
         .genera
         .iter()
-        .find(|g| g.language.name == LANGUAGE)
+        .find(|g| g.language.name == language.code())
         .map(|g| g.genus.clone());
-    let flavor_text = latest_flavor_text(species)
+    let flavor_text = latest_flavor_text(species, language)
         .map(|text| redact_name(&clean_flavor_text(text), &display_name));
 
     let mut types = pokemon.types.clone();
@@ -51,12 +55,12 @@ pub fn entry(species: &PokemonSpecies, pokemon: &Pokemon) -> Result<PokedexEntry
     })
 }
 
-/// The English entry from the most recent game version.
-fn latest_flavor_text(species: &PokemonSpecies) -> Option<&str> {
+/// The entry in `language` from the most recent game version.
+fn latest_flavor_text(species: &PokemonSpecies, language: Language) -> Option<&str> {
     species
         .flavor_text_entries
         .iter()
-        .filter(|f| f.language.name == LANGUAGE)
+        .filter(|f| f.language.name == language.code())
         .max_by_key(|f| resource_id(&f.version.url).unwrap_or(0))
         .map(|f| f.flavor_text.as_str())
 }
@@ -135,7 +139,7 @@ mod tests {
     fn converts_pikachu() {
         let species: PokemonSpecies = fixture("species-25.json");
         let pokemon: Pokemon = fixture("pokemon-25.json");
-        let entry = entry(&species, &pokemon).unwrap();
+        let entry = entry(&species, &pokemon, Language::English).unwrap();
 
         assert_eq!(entry.id, 25);
         assert_eq!(entry.display_name, "Pikachu");

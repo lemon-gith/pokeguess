@@ -11,6 +11,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow};
 use clap::{Parser, Subcommand, ValueEnum};
 use pokeapi::{Pokemon, PokemonSpecies, ResourceList, Source};
+use shared::Language;
 use shared::pokedex::{Pokedex, PokedexEntry, SCHEMA_VERSION};
 
 use fetch::Fetcher;
@@ -121,7 +122,7 @@ fn fetch_pokedex(fetcher: &mut Fetcher, limit: Option<usize>) -> Result<Pokedex>
         let form: Pokemon = fetcher
             .follow(&variety.url)
             .with_context(|| format!("fetching pokemon {}", variety.name))?;
-        pokemon.push(convert::entry(&species, &form)?);
+        pokemon.push(convert::entry(&species, &form, Language::English)?);
 
         if (i + 1) % 50 == 0 || i + 1 == total {
             eprintln!("fetched {}/{total}", i + 1);

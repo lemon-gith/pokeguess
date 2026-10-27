@@ -2,6 +2,7 @@
 <html>
     <head>
         <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>PokéGuess</title>
 
         <!-- Tailwind CSS -->
@@ -16,7 +17,7 @@
         -->
         <link data-trunk rel="copy-dir" href="./img/">
 
-        <!-- See ./img/icons/readme.md for icon accreditation -->
+        <!-- See ./img/icons/credits.md for icon accreditation -->
         <link
             rel="icon" type="image/png"
             href="./img/icons/favicon-96x96.png" sizes="96x96"
@@ -33,29 +34,29 @@
         <!-- Open Graph meta tags -->
         <meta property="og:title" content="PokéGuess" />
         <meta property="og:description" content="Who's that Pokémon?" />
-        <meta property="og:image" content="./img/misc/kitsunetoshuriken.jpg" />
-        <meta property="og:image:type" content="image/jpg" />
+        <meta property="og:image" content="https://pokeguess.piercew.xyz/img/misc/kitsunetoshuriken.jpg" />
+        <meta property="og:image:type" content="image/jpeg" />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="800" />
         <meta property="og:image:alt" content="Fox with Shuriken" />
         <meta property="og:type" content="website" />
         <meta property="og:locale" content="en_GB" />
         <meta property="og:url" content="https://pokeguess.piercew.xyz" />
-    </head>
-    <style>
-        /* write bg styling directly in here, for better readability */
-        body {
-            /* is favicon-96x96, but with 20px padding on all sides */
-            background-image: url(./img/misc/bg_pokeball.png);
-            background-repeat: repeat;
-            background-position: center;
-            background-size: 100px;
-        }
-        @media screen and (max-width: 768px) {
+        <style>
+            /* write bg styling directly in here, for better readability */
             body {
-                background-size: 40px;
+                /* is favicon-96x96, but with 20px padding on all sides */
+                background-image: url(./img/misc/bg_pokeball.png);
+                background-repeat: repeat;
+                background-position: center;
+                background-size: 100px;
             }
-        }
-    </style>
+            @media screen and (max-width: 768px) {
+                body {
+                    background-size: 40px;
+                }
+            }
+        </style>
+    </head>
     <body class="bg-blue-300 grid h-screen w-screen place-items-center"></body>
 </html>

@@ -8,9 +8,32 @@ Motivated by the idea that I could make it public and host it on GitHub Pages, I
 
 A continuously deployed version of this game can be found at my subdomain: [`pokeguess.piercew.xyz`](https://pokeguess.piercew.xyz).
 
-This is hostly entirely on GitHub Pages because the webpage itself is completely static and pre-compiled (via GitHub Actions). All interactivity and game management happens on the client-side using [CSR](https://developer.mozilla.org/en-US/docs/Glossary/CSR), using some tricks to handle persistence (though, not as well as a server would), with only the static pages and codebase being rendered on GitHub's servers.
+This is hosted entirely on GitHub Pages because the webpage itself is completely static and pre-compiled (via GitHub Actions). All interactivity and game management happens on the client-side using [CSR](https://developer.mozilla.org/en-US/docs/Glossary/CSR), using some tricks to handle persistence (though, not as well as a server would), with only the static pages and codebase being rendered on GitHub's servers.
 
 This also means that the user is in charge of rate-limiting themselves on PokeAPI calls. This should not be a problem for expected usage (just playing the game). There is [no official rate limit](https://docs.airbyte.com/integrations/sources/pokeapi#rate-limiting--performance-considerations-airbyte-open-source), but please don't automate or flood my app with requests because this would indirectly do the same (if not worse) for the PokeAPI.
+
+## Repository Layout
+
+This repo is a Cargo workspace:
+
+```
+apps/
+  web/            # the Yew front-end, built with Trunk and deployed to GitHub Pages
+crates/
+  shared/         # types and game logic shared between the front-end and the API
+  pokeapi/        # a small, typed PokeAPI wrapper
+  dex-builder/    # builds and updates the pokedex.json dataset
+```
+
+The Vercel API (`apps/api`) and the Cloudflare PokeAPI cache (`apps/pokeapi-proxy`) will join these later.
+
+### Running Locally
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install trunk --locked
+cd apps/web && trunk serve
+```
 
 ## Notes
 

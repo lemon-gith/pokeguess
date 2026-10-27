@@ -24,8 +24,9 @@ pub fn find<'a>(
     pokemon.iter().find(|entry| matches(guess, entry, language))
 }
 
-/// Reduces a name to the form guesses are compared in.
-fn normalize(text: &str, language: Language) -> String {
+/// Reduces a name to the form guesses are compared in: two names that
+/// normalise the same are treated as the same guess.
+pub fn normalize(text: &str, language: Language) -> String {
     match language {
         Language::English => normalize_latin(text),
     }

@@ -40,6 +40,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "dex-builder"
+version = "0.1.0"
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -478,6 +482,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "pokeapi"
+version = "0.1.0"
+
+[[package]]
 name = "pokeguess"
 version = "0.1.0"
 dependencies = [
@@ -623,6 +631,10 @@ dependencies = [
  "ryu",
  "serde",
 ]
+
+[[package]]
+name = "shared"
+version = "0.1.0"
 
 [[package]]
 name = "slab"

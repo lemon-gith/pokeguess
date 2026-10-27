@@ -10,6 +10,10 @@ use crate::pokedex::{Pokedex, PokedexEntry};
 /// Wrong guesses allowed before a round is lost.
 pub const MAX_GUESSES: usize = 3;
 
+/// Points for catching a Pokémon on the first, second, third… guess.
+/// Guesses beyond the end of the list score nothing.
+pub const POINTS: [u32; 7] = [10, 7, 5, 4, 3, 2, 1];
+
 /// How many facts the [`Clue::Facts`] clue shows.
 pub const FACT_COUNT: usize = 3;
 
@@ -37,9 +41,19 @@ impl Mode {
         match self {
             Mode::Baby => "Just the picture. You've got this!",
             Mode::Easy => "A shadow, then the Pokédex entry, then the picture.",
-            Mode::Medium => "The Pokédex entry, then a shadow on your last guess.",
-            Mode::Hard => "Three facts, then the Pokédex entry, then a shadow.",
+            Mode::Medium => {
+                "The Pokédex entry, then a shadow on your last guess. No name suggestions."
+            }
+            Mode::Hard => {
+                "Three facts, then the Pokédex entry, then a shadow. No name suggestions."
+            }
         }
+    }
+
+    /// Whether the guess box suggests Pokémon names. Off in the harder
+    /// modes, where spelling the name is part of the challenge.
+    pub fn suggests_names(self) -> bool {
+        matches!(self, Mode::Baby | Mode::Easy)
     }
 
     /// The clue revealed before each guess; `None` means nothing new.
@@ -116,7 +130,7 @@ impl Fact {
                 .map(|t| title_case(t))
                 .collect::<Vec<_>>()
                 .join(" / "),
-            Fact::Generation => format!("Generation {}", entry.generation),
+            Fact::Generation => entry.generation.to_string(),
             Fact::Color => title_case(&entry.color),
             Fact::Shape => title_case(entry.shape.as_deref()?),
             Fact::Habitat => title_case(entry.habitat.as_deref()?),
@@ -288,10 +302,10 @@ impl Round {
         mode.clues()[..=stage].iter().flatten().copied().collect()
     }
 
-    /// Points for this round: one per guess left unused, plus one for getting it.
+    /// Points for this round, from [`POINTS`] by the guess that got it.
     pub fn points(&self) -> u32 {
         match self.outcome {
-            Some(Outcome::Guessed) => (MAX_GUESSES - self.wrong_guesses.len()) as u32,
+            Some(Outcome::Guessed) => POINTS.get(self.wrong_guesses.len()).copied().unwrap_or(0),
             _ => 0,
         }
     }
@@ -349,13 +363,18 @@ mod tests {
     fn fewer_guesses_score_more() {
         let mut first_try = Round::new(25, vec![]);
         first_try.guess(Some(25));
-        assert_eq!(first_try.points(), 3);
+        assert_eq!(first_try.points(), 10);
+
+        let mut second_try = Round::new(25, vec![]);
+        second_try.guess(Some(1));
+        second_try.guess(Some(25));
+        assert_eq!(second_try.points(), 7);
 
         let mut last_try = Round::new(25, vec![]);
         last_try.guess(Some(1));
         last_try.guess(Some(2));
         assert_eq!(last_try.guess(Some(25)), GuessResult::Correct);
-        assert_eq!(last_try.points(), 1);
+        assert_eq!(last_try.points(), 5);
     }
 
     #[test]
@@ -379,6 +398,7 @@ mod tests {
         entry.habitat = Some("rough-terrain".into());
         let value = |fact: Fact| fact.value(&entry).unwrap();
         assert_eq!(value(Fact::Types), "Electric / Flying");
+        assert_eq!(value(Fact::Generation), "1");
         assert_eq!(value(Fact::Height), "0.4 m");
         assert_eq!(value(Fact::Weight), "6.0 kg");
         assert_eq!(value(Fact::Habitat), "Rough terrain");

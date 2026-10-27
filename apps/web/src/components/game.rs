@@ -273,7 +273,7 @@ pub fn game(props: &GameProps) -> Html {
                 <input
                     ref={input}
                     type="text"
-                    list="pokemon-names"
+                    list={mode.suggests_names().then_some("pokemon-names")}
                     autocomplete="off"
                     autocapitalize="off"
                     spellcheck="false"
@@ -286,18 +286,17 @@ pub fn game(props: &GameProps) -> Html {
                 <button type="submit" class="cursor-pointer rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700">
                     { "Guess" }
                 </button>
-                <datalist id="pokemon-names">
-                    { for names.iter().map(|name| html! { <option value={name.clone()} /> }) }
-                </datalist>
+                if mode.suggests_names() {
+                    <datalist id="pokemon-names">
+                        { for names.iter().map(|name| html! { <option value={name.clone()} /> }) }
+                    </datalist>
+                }
             </form>
         },
         Some(Outcome::Guessed) => html! {
             <div class="space-y-3 text-center">
                 <p class="text-lg font-semibold text-green-700">
-                    { match round.points() {
-                        1 => "Got it on the last guess! +1 point".to_string(),
-                        points => format!("Got it! +{points} points"),
-                    } }
+                    { format!("Got it! +{} points", round.points()) }
                 </p>
                 <button ref={continue_button} type="button" class="cursor-pointer rounded-lg bg-blue-600 px-6 py-2 font-semibold text-white hover:bg-blue-700" onclick={next_round}>
                     { "Next Pokémon" }

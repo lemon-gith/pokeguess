@@ -3,6 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod pokedex;
+
 /// Response body of the user service's health endpoint.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Health {

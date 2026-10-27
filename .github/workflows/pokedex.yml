@@ -1,0 +1,48 @@
+name: Update Pokédex
+on:
+  schedule:
+    # 04:23 UTC on the 1st of every month
+    - cron: "23 4 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Restore cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/git
+            ~/.cargo/registry
+            target
+          key: ${{ runner.os }}-cargo-dex-${{ hashFiles('**/Cargo.lock') }}
+
+      # rate-limited; only rewrites the file if something changed
+      - name: Fetch the latest data
+        run: cargo run --release -p dex-builder -- update --summary "$RUNNER_TEMP/pokedex-changes.md"
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet -- apps/web/data/pokedex.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open a pull request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: feature/pokedex-update
+          delete-branch: true
+          add-paths: apps/web/data/pokedex.json
+          commit-message: update pokedex.json from PokeAPI
+          title: Update pokedex.json from PokeAPI
+          body-path: ${{ runner.temp }}/pokedex-changes.md

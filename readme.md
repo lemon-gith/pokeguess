@@ -28,6 +28,20 @@ crates/
 
 `apps/user` will be served at `user.pokeguess.piercew.xyz`. A Cloudflare Worker (Rust) that caches PokeAPI responses will join as `apps/api`, served at `api.pokeguess.piercew.xyz`.
 
+### The Pokédex Dataset
+
+The game reads everything it needs about each Pokémon from `apps/web/data/pokedex.json`, which is served at `/pokedex.json`. It is built by `dex-builder`, so the game itself never has to call PokeAPI:
+
+```sh
+cargo run --release -p dex-builder -- build             # rebuild the whole file
+cargo run --release -p dex-builder -- build --limit 10  # quick test run with the first 10 species
+cargo run --release -p dex-builder -- update            # only rewrite the file if anything changed
+```
+
+By default it reads from [PokeAPI's static data dump](https://github.com/PokeAPI/api-data) on GitHub, which is what PokeAPI itself serves, so it puts no load on PokeAPI's servers. Pass `--source pokeapi` to use the live API instead. Either way, it makes one request at a time with at least `--delay-ms` (default 100) between them, and backs off on rate limits and server errors.
+
+The [Update Pokédex](.github/workflows/pokedex.yml) workflow runs `update` on the 1st of every month and opens a pull request if anything changed.
+
 ### Running Locally
 
 ```sh

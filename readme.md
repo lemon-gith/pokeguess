@@ -22,10 +22,13 @@ apps/
 crates/
   shared/         # types and game logic shared between the front-end and the API
   pokeapi/        # a small, typed PokeAPI wrapper
-  dex-builder/    # builds and updates the pokedex.json dataset
+  dex-builder/    # builds pokedex.json, and checks monthly for PokeAPI updates
 ```
 
-The Vercel API (`apps/api`) and the Cloudflare PokeAPI cache (`apps/pokeapi-proxy`) will join these later.
+Two more apps will join these later:
+
+- `apps/api`: a Cloudflare Worker (Rust) that caches PokeAPI responses, served at `api.pokeguess.piercew.xyz`
+- `apps/user`: Vercel functions (Rust) for accounts, top runs and preferences, served at `user.pokeguess.piercew.xyz`
 
 ### Running Locally
 

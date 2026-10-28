@@ -48,7 +48,7 @@ fn run_row(run: &RunRecord) -> Html {
             <span class="text-gray-600">
                 { format!(
                     " · {} caught · Gen {} · {}",
-                    run.rounds_won,
+                    run.caught,
                     format_generations(&run.generations),
                     browser::format_date(run.finished_at),
                 ) }

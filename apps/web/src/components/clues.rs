@@ -59,6 +59,20 @@ pub fn clues(props: &CluesProps) -> Html {
             }
         });
 
+    let first_letter = (shows(Clue::FirstLetter) && !props.revealed)
+        .then(|| entry.display_name.chars().next())
+        .flatten()
+        .map(|letter| {
+            html! {
+                <p class="text-gray-800">
+                    { "Its name starts with " }
+                    <span class="rounded bg-gray-200 px-1.5 font-mono font-bold">
+                        { letter.to_uppercase().collect::<String>() }
+                    </span>
+                </p>
+            }
+        });
+
     let facts = shows(Clue::Facts).then(|| {
         html! {
             <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
@@ -88,6 +102,9 @@ pub fn clues(props: &CluesProps) -> Html {
             }
             if let Some(facts) = facts {
                 { facts }
+            }
+            if let Some(first_letter) = first_letter {
+                { first_letter }
             }
             if let Some(description) = description {
                 { description }

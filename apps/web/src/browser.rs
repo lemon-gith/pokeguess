@@ -1,6 +1,6 @@
 //! Small wrappers around browser APIs.
 
-use gloo::storage::{LocalStorage, Storage};
+use gloo::storage::{LocalStorage, SessionStorage, Storage};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use web_sys::HtmlImageElement;
@@ -47,4 +47,23 @@ pub fn load<T: DeserializeOwned>(key: &str) -> Option<T> {
 /// Saves a value to local storage, ignoring failures for the same reasons.
 pub fn save<T: Serialize>(key: &str, value: &T) {
     let _ = LocalStorage::set(key, value);
+}
+
+/// Removes a value from local storage.
+pub fn forget(key: &str) {
+    LocalStorage::delete(key);
+}
+
+/// Like [`load`], but for this tab only: survives a refresh, not a new tab.
+pub fn load_session<T: DeserializeOwned>(key: &str) -> Option<T> {
+    SessionStorage::get(key).ok()
+}
+
+/// Like [`save`], but for this tab only.
+pub fn save_session<T: Serialize>(key: &str, value: &T) {
+    let _ = SessionStorage::set(key, value);
+}
+
+pub fn forget_session(key: &str) {
+    SessionStorage::delete(key);
 }

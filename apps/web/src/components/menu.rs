@@ -14,7 +14,7 @@ pub struct MenuProps {
     pub on_start: Callback<RunSettings>,
 }
 
-const CHOICE: &str = "cursor-pointer rounded-lg border-2 px-3 py-2 text-left transition";
+const CHOICE: &str = "cursor-pointer rounded-lg border-2 px-3 py-2 transition";
 const CHOSEN: &str = "border-blue-500 bg-blue-50";
 const UNCHOSEN: &str = "border-gray-200 hover:border-gray-400";
 
@@ -40,7 +40,7 @@ pub fn menu(props: &MenuProps) -> Html {
             UNCHOSEN
         };
         html! {
-            <button type="button" class={classes!(CHOICE, state)} {onclick}>
+            <button type="button" class={classes!(CHOICE, state, "text-left")} {onclick}>
                 <span class="block font-semibold">{ mode.label() }</span>
                 <span class="block text-sm text-gray-600">{ mode.blurb() }</span>
             </button>
@@ -69,7 +69,7 @@ pub fn menu(props: &MenuProps) -> Html {
         html! {
             <button
                 type="button"
-                class={classes!(CHOICE, state, "min-w-11", "text-center", "font-semibold")}
+                class={classes!(CHOICE, state, "min-w-12", "text-center", "font-semibold")}
                 aria-pressed={settings.generations.contains(&generation).to_string()}
                 {onclick}
             >
@@ -123,14 +123,17 @@ pub fn menu(props: &MenuProps) -> Html {
                 <p class="text-sm text-gray-600">{ format!("{pool_size} Pokémon to guess from") }</p>
             </section>
 
-            <button
-                type="button"
-                class="w-full cursor-pointer rounded-xl bg-blue-600 px-4 py-3 text-lg font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
-                disabled={pool_size == 0}
-                onclick={start}
-            >
-                { "Start" }
-            </button>
+            // stays in reach at the bottom of the screen on phones
+            <div class="sticky bottom-0 -mx-4 bg-white/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:static md:mx-0 md:bg-transparent md:p-0">
+                <button
+                    type="button"
+                    class="w-full cursor-pointer rounded-xl bg-blue-600 px-4 py-3 text-lg font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                    disabled={pool_size == 0}
+                    onclick={start}
+                >
+                    { "Start" }
+                </button>
+            </div>
 
             <Leaderboard runs={props.runs.clone()} />
         </div>

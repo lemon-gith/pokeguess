@@ -104,7 +104,7 @@ pub fn menu(props: &MenuProps) -> Html {
         <div class="space-y-6">
             <header class="text-center">
                 <h1 class="text-4xl font-bold">{ "PokéGuess" }</h1>
-                <p class="text-gray-600">{ "Who's that Pokémon? Three guesses each, and a run lasts until one gets away." }</p>
+                <p class="text-gray-600">{ "Who's that Pokémon? Wrong guesses, hints and running away each cost a life. How many can you catch?" }</p>
             </header>
 
             <section class="space-y-2">

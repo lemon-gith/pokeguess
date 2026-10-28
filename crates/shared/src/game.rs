@@ -1,4 +1,5 @@
-//! The rules of a round: which clues each mode reveals, and how guesses play out.
+//! The modes, the clues they reveal, and which Pokémon a run asks about.
+//! Playing a run (lives, guesses, hints) is in [`crate::play`].
 //!
 //! Randomness is passed in as a `pick(n)` function returning an index below
 //! `n`, so this module stays deterministic and testable.
@@ -7,71 +8,81 @@ use serde::{Deserialize, Serialize};
 
 use crate::pokedex::{Pokedex, PokedexEntry};
 
-/// Wrong guesses allowed before a round is lost.
-pub const MAX_GUESSES: usize = 3;
-
-/// Points for catching a Pokémon on the first, second, third… guess.
-/// Guesses beyond the end of the list score nothing.
-pub const POINTS: [u32; 7] = [10, 7, 5, 4, 3, 2, 1];
-
 /// How many facts the [`Clue::Facts`] clue shows.
 pub const FACT_COUNT: usize = 3;
 
+/// Clues per Pokémon: the first is free, the rest are bought as hints.
+pub const CLUES_PER_MODE: usize = 3;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Mode {
-    Baby,
     Easy,
-    Medium,
+    Normal,
     Hard,
+    Expert,
 }
 
 impl Mode {
-    pub const ALL: [Mode; 4] = [Mode::Baby, Mode::Easy, Mode::Medium, Mode::Hard];
+    pub const ALL: [Mode; 4] = [Mode::Easy, Mode::Normal, Mode::Hard, Mode::Expert];
 
     pub fn label(self) -> &'static str {
         match self {
-            Mode::Baby => "Baby",
             Mode::Easy => "Easy",
-            Mode::Medium => "Medium",
+            Mode::Normal => "Normal",
             Mode::Hard => "Hard",
+            Mode::Expert => "Expert",
         }
     }
 
     pub fn blurb(self) -> &'static str {
         match self {
-            Mode::Baby => "Just the picture. You've got this!",
-            Mode::Easy => "A shadow, then the Pokédex entry, then the picture.",
-            Mode::Medium => {
-                "The Pokédex entry, then a shadow on your last guess. No name suggestions."
-            }
+            Mode::Easy => "The picture. Hints: the Pokédex entry, then the first letter. 5 lives.",
+            Mode::Normal => "A shadow. Hints: the Pokédex entry, then the first letter.",
             Mode::Hard => {
-                "Three facts, then the Pokédex entry, then a shadow. No name suggestions."
+                "The Pokédex entry. Hints: a shadow, then the picture. No name suggestions."
+            }
+            Mode::Expert => {
+                "Three facts. Hints: the Pokédex entry, then a shadow. No name suggestions or extra lives."
             }
         }
+    }
+
+    /// The free clue, then the clues hints reveal, in order.
+    pub fn clues(self) -> [Clue; CLUES_PER_MODE] {
+        match self {
+            Mode::Easy => [Clue::Picture, Clue::Description, Clue::FirstLetter],
+            Mode::Normal => [Clue::Shadow, Clue::Description, Clue::FirstLetter],
+            Mode::Hard => [Clue::Description, Clue::Shadow, Clue::Picture],
+            Mode::Expert => [Clue::Facts, Clue::Description, Clue::Shadow],
+        }
+    }
+
+    pub fn starting_lives(self) -> usize {
+        match self {
+            Mode::Easy => 5,
+            Mode::Normal | Mode::Hard | Mode::Expert => 3,
+        }
+    }
+
+    /// Points a wrong guess takes off the current Pokémon's catch.
+    pub fn wrong_guess_penalty(self) -> u32 {
+        match self {
+            Mode::Easy => 1,
+            Mode::Normal => 2,
+            Mode::Hard => 3,
+            Mode::Expert => 5,
+        }
+    }
+
+    /// Whether a catch streak can win back a life.
+    pub fn earns_lives(self) -> bool {
+        self != Mode::Expert
     }
 
     /// Whether the guess box suggests Pokémon names. Off in the harder
     /// modes, where spelling the name is part of the challenge.
     pub fn suggests_names(self) -> bool {
-        matches!(self, Mode::Baby | Mode::Easy)
-    }
-
-    /// The clue revealed before each guess; `None` means nothing new.
-    pub fn clues(self) -> [Option<Clue>; MAX_GUESSES] {
-        match self {
-            Mode::Baby => [Some(Clue::Picture), None, None],
-            Mode::Easy => [
-                Some(Clue::Shadow),
-                Some(Clue::Description),
-                Some(Clue::Picture),
-            ],
-            Mode::Medium => [Some(Clue::Description), None, Some(Clue::Shadow)],
-            Mode::Hard => [
-                Some(Clue::Facts),
-                Some(Clue::Description),
-                Some(Clue::Shadow),
-            ],
-        }
+        matches!(self, Mode::Easy | Mode::Normal)
     }
 }
 
@@ -81,10 +92,11 @@ pub enum Clue {
     Shadow,
     Description,
     Facts,
+    FirstLetter,
 }
 
 /// One piece of data the [`Clue::Facts`] clue can show.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Fact {
     Types,
     Generation,
@@ -174,10 +186,10 @@ pub struct RunSettings {
 }
 
 impl RunSettings {
-    /// Easy mode with every generation in the dataset.
+    /// Normal mode with every generation in the dataset.
     pub fn new(dex: &Pokedex) -> Self {
         Self {
-            mode: Mode::Easy,
+            mode: Mode::Normal,
             generations: dex.generations(),
         }
     }
@@ -227,154 +239,19 @@ pub fn pick_target(pool: &[u16], seen: &[u16], pick: impl FnOnce(usize) -> usize
     Some(candidates[index])
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Outcome {
-    Guessed,
-    Missed,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GuessResult {
-    Correct,
-    /// Wrong, with guesses left.
-    Wrong,
-    /// Wrong, and that was the last guess.
-    Missed,
-    /// Not the name of any Pokémon; doesn't use up a guess.
-    Unknown,
-    /// Already guessed this round; doesn't use up a guess.
-    Repeated,
-    /// The round is already over.
-    Finished,
-}
-
-/// One Pokémon to guess.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Round {
-    pub target: u16,
-    /// Shown by [`Clue::Facts`].
-    pub facts: Vec<Fact>,
-    pub wrong_guesses: Vec<u16>,
-    pub outcome: Option<Outcome>,
-}
-
-impl Round {
-    pub fn new(target: u16, facts: Vec<Fact>) -> Self {
-        Self {
-            target,
-            facts,
-            wrong_guesses: Vec::new(),
-            outcome: None,
-        }
-    }
-
-    /// Plays a guess, given the ID of the Pokémon it named (if any).
-    pub fn guess(&mut self, guessed: Option<u16>) -> GuessResult {
-        if self.outcome.is_some() {
-            return GuessResult::Finished;
-        }
-        let Some(id) = guessed else {
-            return GuessResult::Unknown;
-        };
-        if id == self.target {
-            self.outcome = Some(Outcome::Guessed);
-            return GuessResult::Correct;
-        }
-        if self.wrong_guesses.contains(&id) {
-            return GuessResult::Repeated;
-        }
-        self.wrong_guesses.push(id);
-        if self.wrong_guesses.len() >= MAX_GUESSES {
-            self.outcome = Some(Outcome::Missed);
-            GuessResult::Missed
-        } else {
-            GuessResult::Wrong
-        }
-    }
-
-    pub fn guesses_left(&self) -> usize {
-        MAX_GUESSES.saturating_sub(self.wrong_guesses.len())
-    }
-
-    /// Every clue revealed so far, in the order they were revealed.
-    pub fn clues(&self, mode: Mode) -> Vec<Clue> {
-        let stage = self.wrong_guesses.len().min(MAX_GUESSES - 1);
-        mode.clues()[..=stage].iter().flatten().copied().collect()
-    }
-
-    /// Points for this round, from [`POINTS`] by the guess that got it.
-    pub fn points(&self) -> u32 {
-        match self.outcome {
-            Some(Outcome::Guessed) => POINTS.get(self.wrong_guesses.len()).copied().unwrap_or(0),
-            _ => 0,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::pokedex::sample;
 
     #[test]
-    fn every_mode_starts_with_a_clue() {
+    fn hints_never_repeat_a_clue() {
         for mode in Mode::ALL {
-            assert!(mode.clues()[0].is_some(), "{mode:?}");
+            let clues = mode.clues();
+            for (i, clue) in clues.iter().enumerate() {
+                assert!(!clues[i + 1..].contains(clue), "{mode:?} repeats {clue:?}");
+            }
         }
-    }
-
-    #[test]
-    fn clues_accumulate_with_wrong_guesses() {
-        let mut round = Round::new(25, vec![]);
-        assert_eq!(round.clues(Mode::Easy), [Clue::Shadow]);
-        round.guess(Some(1));
-        assert_eq!(round.clues(Mode::Easy), [Clue::Shadow, Clue::Description]);
-        round.guess(Some(2));
-        assert_eq!(
-            round.clues(Mode::Easy),
-            [Clue::Shadow, Clue::Description, Clue::Picture]
-        );
-        // Medium reveals nothing new on the second guess
-        assert_eq!(round.clues(Mode::Medium), [Clue::Description, Clue::Shadow]);
-    }
-
-    #[test]
-    fn three_wrong_guesses_lose_the_round() {
-        let mut round = Round::new(25, vec![]);
-        assert_eq!(round.guess(Some(1)), GuessResult::Wrong);
-        assert_eq!(round.guess(Some(2)), GuessResult::Wrong);
-        assert_eq!(round.guesses_left(), 1);
-        assert_eq!(round.guess(Some(3)), GuessResult::Missed);
-        assert_eq!(round.outcome, Some(Outcome::Missed));
-        assert_eq!(round.points(), 0);
-        assert_eq!(round.guess(Some(25)), GuessResult::Finished);
-    }
-
-    #[test]
-    fn unknown_and_repeated_guesses_are_free() {
-        let mut round = Round::new(25, vec![]);
-        assert_eq!(round.guess(None), GuessResult::Unknown);
-        assert_eq!(round.guess(Some(1)), GuessResult::Wrong);
-        assert_eq!(round.guess(Some(1)), GuessResult::Repeated);
-        assert_eq!(round.guesses_left(), 2);
-    }
-
-    #[test]
-    fn fewer_guesses_score_more() {
-        let mut first_try = Round::new(25, vec![]);
-        first_try.guess(Some(25));
-        assert_eq!(first_try.points(), 10);
-
-        let mut second_try = Round::new(25, vec![]);
-        second_try.guess(Some(1));
-        second_try.guess(Some(25));
-        assert_eq!(second_try.points(), 7);
-
-        let mut last_try = Round::new(25, vec![]);
-        last_try.guess(Some(1));
-        last_try.guess(Some(2));
-        assert_eq!(last_try.guess(Some(25)), GuessResult::Correct);
-        assert_eq!(last_try.points(), 5);
     }
 
     #[test]

@@ -11,11 +11,13 @@ use yew::prelude::*;
 mod browser;
 mod components;
 
-use components::game::Game;
+use components::game::{Game, SAVED_GAME_KEY, SavedGame};
 use components::menu::Menu;
 
-const SETTINGS_KEY: &str = "pokeguess.settings";
-const RUNS_KEY: &str = "pokeguess.runs";
+// v2: the lives rules, whose scores aren't comparable with the first version's
+const SETTINGS_KEY: &str = "pokeguess.settings.v2";
+const RUNS_KEY: &str = "pokeguess.runs.v2";
+const OLD_KEYS: [&str; 2] = ["pokeguess.settings", "pokeguess.runs"];
 const CARD: &str = "box-border flex w-full flex-col bg-white/95 p-4 md:my-8 md:w-11/12 md:max-w-3xl md:rounded-xl md:p-8 md:shadow-lg md:outline md:outline-black/5";
 
 /// Runs kept in local storage; each mode's best runs are always kept.
@@ -93,7 +95,14 @@ fn app() -> Html {
         });
     }
     let runs = use_state(|| browser::load::<Vec<RunRecord>>(RUNS_KEY).unwrap_or_default());
-    let playing = use_state(|| None::<RunSettings>);
+    // pick up a game this tab was playing before a refresh
+    let playing =
+        use_state(|| browser::load_session::<SavedGame>(SAVED_GAME_KEY).map(|game| game.settings));
+    use_effect_with((), |_| {
+        for key in OLD_KEYS {
+            browser::forget(key);
+        }
+    });
 
     let body = match &*dex {
         DexState::Loading => html! {
@@ -118,7 +127,10 @@ fn app() -> Html {
                 };
                 let on_quit = {
                     let playing = playing.clone();
-                    Callback::from(move |()| playing.set(None))
+                    Callback::from(move |()| {
+                        browser::forget_session(SAVED_GAME_KEY);
+                        playing.set(None);
+                    })
                 };
                 html! {
                     <Game dex={dex.clone()} settings={settings.clone()} {on_finish} {on_quit} />

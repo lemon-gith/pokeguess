@@ -42,7 +42,7 @@ impl Mode {
                 "The Pokédex entry. Hints: a shadow, then the picture. No name suggestions."
             }
             Mode::Expert => {
-                "Three facts. Hints: the Pokédex entry, then a shadow. No name suggestions or extra lives."
+                "Three facts. Hints: the Pokédex entry, then a shadow. Only 3 balls, hints cost a whole life, and no name suggestions or extra lives."
             }
         }
     }
@@ -64,13 +64,32 @@ impl Mode {
         }
     }
 
-    /// Points a wrong guess takes off the current Pokémon's catch.
-    pub fn wrong_guess_penalty(self) -> u32 {
+    /// What a catch is worth on each guess. There's one ball (guess) per
+    /// entry: missing with the last one makes the Pokémon flee.
+    pub fn catch_points(self) -> &'static [u32] {
         match self {
-            Mode::Easy => 1,
-            Mode::Normal => 2,
-            Mode::Hard => 3,
-            Mode::Expert => 5,
+            Mode::Easy | Mode::Normal | Mode::Hard => &[8, 5, 3, 2, 1],
+            Mode::Expert => &[8, 5, 3],
+        }
+    }
+
+    pub fn balls(self) -> usize {
+        self.catch_points().len()
+    }
+
+    /// Points lost when a Pokémon flees after the last ball.
+    pub fn flee_penalty(self) -> i32 {
+        match self {
+            Mode::Expert => 2,
+            Mode::Easy | Mode::Normal | Mode::Hard => 0,
+        }
+    }
+
+    /// What a hint costs, in half lives.
+    pub fn hint_cost(self) -> u32 {
+        match self {
+            Mode::Expert => 2,
+            Mode::Easy | Mode::Normal | Mode::Hard => 1,
         }
     }
 

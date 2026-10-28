@@ -5,4 +5,9 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+gloo = "0.11"
+js-sys = "0.3"
+serde = "1"
+shared = { path = "../../crates/shared" }
+web-sys = { version = "0.3", features = ["HtmlButtonElement", "HtmlImageElement", "HtmlInputElement"] }
 yew.workspace = true

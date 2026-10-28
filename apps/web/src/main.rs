@@ -1,81 +1,151 @@
+use std::ops::Deref;
+use std::rc::Rc;
+
+use gloo::net::http::Request;
+use shared::game::RunSettings;
+use shared::pokedex::{Pokedex, SCHEMA_VERSION};
+use shared::runs::{RunRecord, add_run};
+use yew::platform::spawn_local;
 use yew::prelude::*;
 
-enum Msg {
-    AddOne,
-}
+mod browser;
+mod components;
 
-struct App {
-    value: i64,
-    // TODO: put rustemon client in here
-}
+use components::game::Game;
+use components::menu::Menu;
 
-enum MenuOptions {
-    StartGame,
-    GameOptions, // game-specific options, e.g. gens, difficulty, etc.
-    Settings,    // overall app settings
-}
+const SETTINGS_KEY: &str = "pokeguess.settings";
+const RUNS_KEY: &str = "pokeguess.runs";
+/// Runs kept in local storage; each mode's best runs are always kept.
+const MAX_STORED_RUNS: usize = 100;
 
-struct StartMenu {
-    selection: Option<MenuOptions>,
-}
+/// The loaded dataset. Compared by pointer, so passing it as a prop is cheap.
+#[derive(Clone)]
+pub struct Dex(Rc<Pokedex>);
 
-impl Component for StartMenu {
-    type Message = Msg;
-    type Properties = ();
-
-    fn create(_ctx: &Context<Self>) -> Self {
-        Self { selection: None }
-    }
-
-    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
-        false
-    }
-
-    fn view(&self, ctx: &Context<Self>) -> Html {
-        html! {
-            <></>
-        }
+impl PartialEq for Dex {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
     }
 }
 
-impl Component for App {
-    type Message = Msg;
-    type Properties = ();
+impl Deref for Dex {
+    type Target = Pokedex;
 
-    fn create(_ctx: &Context<Self>) -> Self {
-        Self { value: 0 }
+    fn deref(&self) -> &Pokedex {
+        &self.0
     }
+}
 
-    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
-        match msg {
-            Msg::AddOne => {
-                self.value += 1;
-                true
-            }
-        }
+enum DexState {
+    Loading,
+    Ready(Dex),
+    Failed(String),
+}
+
+async fn fetch_pokedex() -> Result<Pokedex, String> {
+    let response = Request::get("pokedex.json")
+        .send()
+        .await
+        .map_err(|err| err.to_string())?;
+    if !response.ok() {
+        return Err(format!("the server said {}", response.status()));
     }
+    let dex: Pokedex = response.json().await.map_err(|err| err.to_string())?;
+    if dex.schema_version != SCHEMA_VERSION {
+        return Err(format!(
+            "unsupported dataset version {}",
+            dex.schema_version
+        ));
+    }
+    Ok(dex)
+}
 
-    fn view(&self, ctx: &Context<Self>) -> Html {
-        let outline = "shadow-lg outline outline-black/5 dark:shadow-none dark:-outline-offset-1 dark:outline-white/10";
+/// The last settings used, limited to generations the dataset has.
+fn stored_settings(dex: &Pokedex) -> RunSettings {
+    let defaults = RunSettings::new(dex);
+    let Some(mut settings) = browser::load::<RunSettings>(SETTINGS_KEY) else {
+        return defaults;
+    };
+    settings
+        .generations
+        .retain(|g| defaults.generations.contains(g));
+    if settings.generations.is_empty() {
+        settings.generations = defaults.generations;
+    }
+    settings
+}
 
-        html! {
-            <div class={"bg-gray-500 flex flex-col items-center justify-center gap-y-5 size-64 box-border md:w-3/4 w-5/6 md:h-3/4 h-11/12 p-6 rounded-xl ".to_owned() + outline}>
-                <button class={"bg-white p-2 rounded-xl cursor-pointer ".to_owned() + outline}
-                    onclick={ctx.link().callback(|_| Msg::AddOne)}
-                >
-                    <img
-                        src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/132.png"
-                        alt="ditto" style="width: 100px"
-                    />
-                    <figcaption>
-                        {"Click Me"}
-                    </figcaption>
-                </button>
-                <p class={"bg-white p-6 max-w-sm rounded-xl ".to_owned() + outline}>
-                    { self.value }
-                </p>
+#[function_component(App)]
+fn app() -> Html {
+    let dex = use_state(|| DexState::Loading);
+    {
+        let dex = dex.clone();
+        use_effect_with((), move |_| {
+            spawn_local(async move {
+                dex.set(match fetch_pokedex().await {
+                    Ok(pokedex) => DexState::Ready(Dex(Rc::new(pokedex))),
+                    Err(err) => DexState::Failed(err),
+                });
+            });
+        });
+    }
+    let runs = use_state(|| browser::load::<Vec<RunRecord>>(RUNS_KEY).unwrap_or_default());
+    let playing = use_state(|| None::<RunSettings>);
+
+    let body = match &*dex {
+        DexState::Loading => html! {
+            <p class="text-center text-gray-600">{ "Loading the Pokédex…" }</p>
+        },
+        DexState::Failed(err) => html! {
+            <div class="space-y-2 text-center">
+                <p class="font-semibold">{ "Couldn't load the Pokédex." }</p>
+                <p class="text-sm text-gray-600">{ err }</p>
             </div>
-        }
+        },
+        DexState::Ready(dex) => match &*playing {
+            Some(settings) => {
+                let on_finish = {
+                    let runs = runs.clone();
+                    Callback::from(move |run: RunRecord| {
+                        let mut updated = (*runs).clone();
+                        add_run(&mut updated, run, MAX_STORED_RUNS);
+                        browser::save(RUNS_KEY, &updated);
+                        runs.set(updated);
+                    })
+                };
+                let on_quit = {
+                    let playing = playing.clone();
+                    Callback::from(move |()| playing.set(None))
+                };
+                html! {
+                    <Game dex={dex.clone()} settings={settings.clone()} {on_finish} {on_quit} />
+                }
+            }
+            None => {
+                let on_start = {
+                    let playing = playing.clone();
+                    Callback::from(move |settings: RunSettings| {
+                        browser::save(SETTINGS_KEY, &settings);
+                        playing.set(Some(settings));
+                    })
+                };
+                html! {
+                    <Menu
+                        dex={dex.clone()}
+                        settings={stored_settings(dex)}
+                        runs={(*runs).clone()}
+                        {on_start}
+                    />
+                }
+            }
+        },
+    };
+
+    html! {
+        <main class="box-border max-h-[95vh] w-11/12 max-w-3xl overflow-y-auto rounded-xl bg-white/95 p-6 shadow-lg outline outline-black/5 md:p-8">
+            { body }
+        </main>
     }
 }
 

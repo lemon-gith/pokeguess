@@ -75,3 +75,54 @@ impl BaseStats {
         .sum()
     }
 }
+
+impl Pokedex {
+    /// The generations present in the dataset, in order.
+    pub fn generations(&self) -> Vec<u8> {
+        let mut generations: Vec<u8> = self.pokemon.iter().map(|p| p.generation).collect();
+        generations.sort_unstable();
+        generations.dedup();
+        generations
+    }
+
+    pub fn get(&self, id: u16) -> Option<&PokedexEntry> {
+        // entries are sorted by id, which is contiguous from 1
+        self.pokemon
+            .get(usize::from(id).wrapping_sub(1))
+            .filter(|p| p.id == id)
+            .or_else(|| self.pokemon.iter().find(|p| p.id == id))
+    }
+}
+
+/// A minimal entry for tests.
+#[cfg(test)]
+pub(crate) fn sample(id: u16, slug: &str, display_name: &str) -> PokedexEntry {
+    PokedexEntry {
+        id,
+        name: slug.into(),
+        display_name: display_name.into(),
+        genus: None,
+        generation: 1,
+        types: vec!["normal".into()],
+        stats: BaseStats {
+            hp: 1,
+            attack: 1,
+            defense: 1,
+            special_attack: 1,
+            special_defense: 1,
+            speed: 1,
+        },
+        height: 1,
+        weight: 1,
+        color: "red".into(),
+        shape: None,
+        habitat: None,
+        is_baby: false,
+        is_legendary: false,
+        is_mythical: false,
+        flavor_text: None,
+        sprite: None,
+        artwork: None,
+        cry: None,
+    }
+}

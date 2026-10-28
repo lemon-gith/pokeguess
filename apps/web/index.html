@@ -2,12 +2,34 @@
 <html>
     <head>
         <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <!-- resizes-content: on Android, the on-screen keyboard shrinks the page
+             instead of covering it, so the guess box stays above it -->
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+        />
         <title>PokéGuess</title>
 
         <!-- Tailwind CSS -->
         <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4">
             // switch this out for tailwind CLI and stylesheet later
+        </script>
+
+        <!--
+            --app-height is the height actually visible, i.e. above the
+            on-screen keyboard on browsers that overlay it (e.g. iOS), so the
+            game screen can fit itself into it.
+        -->
+        <script>
+            (() => {
+                const viewport = window.visualViewport;
+                if (!viewport) return;
+                const update = () => {
+                    document.documentElement.style.setProperty("--app-height", `${viewport.height}px`);
+                };
+                viewport.addEventListener("resize", update);
+                update();
+            })();
         </script>
 
         <!-- Icons -->
@@ -60,5 +82,5 @@
             }
         </style>
     </head>
-    <body class="bg-blue-300 grid h-screen w-screen place-items-center"></body>
+    <body class="min-h-dvh bg-blue-300 md:grid md:place-items-center"></body>
 </html>

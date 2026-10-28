@@ -16,6 +16,8 @@ use components::menu::Menu;
 
 const SETTINGS_KEY: &str = "pokeguess.settings";
 const RUNS_KEY: &str = "pokeguess.runs";
+const CARD: &str = "box-border flex w-full flex-col bg-white/95 p-4 md:my-8 md:w-11/12 md:max-w-3xl md:rounded-xl md:p-8 md:shadow-lg md:outline md:outline-black/5";
+
 /// Runs kept in local storage; each mode's best runs are always kept.
 const MAX_STORED_RUNS: usize = 100;
 
@@ -142,8 +144,15 @@ fn app() -> Html {
         },
     };
 
+    // full-screen on phones, a floating card on wider screens; during a game
+    // it's exactly the visible height, so the guess box sits above the keyboard
+    let height = if playing.is_some() {
+        "h-[var(--app-height,100dvh)] md:h-auto"
+    } else {
+        "min-h-dvh md:min-h-0"
+    };
     html! {
-        <main class="box-border max-h-[95vh] w-11/12 max-w-3xl overflow-y-auto rounded-xl bg-white/95 p-6 shadow-lg outline outline-black/5 md:p-8">
+        <main class={classes!(CARD, height)}>
             { body }
         </main>
     }

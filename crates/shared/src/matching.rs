@@ -24,6 +24,37 @@ pub fn find<'a>(
     pokemon.iter().find(|entry| matches(guess, entry, language))
 }
 
+/// Up to `limit` Pokémon whose name starts with `query`, then ones whose
+/// name contains it, each group alphabetical. Empty for an empty query.
+pub fn suggestions<'a>(
+    query: &str,
+    pokemon: &'a [PokedexEntry],
+    language: Language,
+    limit: usize,
+) -> Vec<&'a PokedexEntry> {
+    let query = normalize(query, language);
+    if query.is_empty() {
+        return Vec::new();
+    }
+    let mut starts = Vec::new();
+    let mut contains = Vec::new();
+    for entry in pokemon {
+        let names = [
+            normalize(&entry.display_name, language),
+            normalize(&entry.name, language),
+        ];
+        if names.iter().any(|n| n.starts_with(&query)) {
+            starts.push(entry);
+        } else if names.iter().any(|n| n.contains(&query)) {
+            contains.push(entry);
+        }
+    }
+    for group in [&mut starts, &mut contains] {
+        group.sort_by(|a, b| a.display_name.cmp(&b.display_name));
+    }
+    starts.into_iter().chain(contains).take(limit).collect()
+}
+
 /// Reduces a name to the form guesses are compared in: two names that
 /// normalise the same are treated as the same guess.
 pub fn normalize(text: &str, language: Language) -> String {
@@ -131,6 +162,27 @@ mod tests {
         for guess in ["nidoran", "nidoran m", "nidorina", "", "   ", "?"] {
             assert!(!matches(guess, &female, Language::English), "{guess:?}");
         }
+    }
+
+    #[test]
+    fn suggests_prefix_matches_before_other_matches() {
+        let dex = [
+            entry(1, "bulbasaur", "Bulbasaur"),
+            entry(2, "ivysaur", "Ivysaur"),
+            entry(3, "venusaur", "Venusaur"),
+            entry(29, "nidoran-f", "Nidoran♀"),
+        ];
+        let names = |query: &str, limit| -> Vec<&str> {
+            suggestions(query, &dex, Language::English, limit)
+                .iter()
+                .map(|e| e.display_name.as_str())
+                .collect()
+        };
+        assert_eq!(names("saur", 6), ["Bulbasaur", "Ivysaur", "Venusaur"]);
+        assert_eq!(names("v", 6), ["Venusaur", "Ivysaur"]);
+        assert_eq!(names("saur", 2), ["Bulbasaur", "Ivysaur"]);
+        assert_eq!(names("nidoran f", 6), ["Nidoran♀"]);
+        assert!(names(" ", 6).is_empty());
     }
 
     #[test]

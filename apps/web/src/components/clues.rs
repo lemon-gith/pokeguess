@@ -2,6 +2,9 @@ use shared::game::{Clue, Fact};
 use shared::pokedex::{PokedexEntry, REDACTED_NAME};
 use yew::prelude::*;
 
+/// Up to 12rem, but smaller on short screens (or above a keyboard).
+const IMAGE_SIZE: &str = "size-[min(12rem,calc(var(--app-height,100dvh)*0.3))]";
+
 #[derive(Properties, PartialEq)]
 pub struct CluesProps {
     pub entry: PokedexEntry,
@@ -32,13 +35,13 @@ pub fn clues(props: &CluesProps) -> Html {
                     {src}
                     {alt}
                     draggable="false"
-                    class="h-48 w-48 select-none object-contain transition-[filter] duration-700"
+                    class={classes!(IMAGE_SIZE, "select-none", "object-contain", "transition-[filter]", "duration-700")}
                     style={if shadow { "filter: brightness(0)" } else { "filter: none" }}
                 />
             }
         }
         _ => html! {
-            <div class="flex h-48 w-48 items-center justify-center rounded-full bg-gray-100 text-6xl font-bold text-gray-300">
+            <div class={classes!(IMAGE_SIZE, "flex", "items-center", "justify-center", "rounded-full", "bg-gray-100", "text-6xl", "font-bold", "text-gray-300")}>
                 { "?" }
             </div>
         },

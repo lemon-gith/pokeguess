@@ -13,6 +13,9 @@ use yew::prelude::*;
 use super::clues::Clues;
 use crate::{Dex, browser};
 
+/// Name suggestions shown at once (in the modes that offer them).
+const SUGGESTIONS: usize = 6;
+
 #[derive(Properties, PartialEq)]
 pub struct GameProps {
     pub dex: Dex,
@@ -195,12 +198,6 @@ pub fn game(props: &GameProps) -> Html {
             },
         );
     }
-    let names = use_memo(props.dex.clone(), |dex| {
-        let mut names: Vec<String> = dex.pokemon.iter().map(|p| p.display_name.clone()).collect();
-        names.sort_unstable();
-        names
-    });
-
     let Some(entry) = props.dex.get(state.round.target).cloned() else {
         return html! { <p>{ "Something went wrong picking a Pokémon." }</p> };
     };
@@ -239,6 +236,42 @@ pub fn game(props: &GameProps) -> Html {
         Callback::from(move |_| on_quit.emit(()))
     };
 
+    let suggestions = if mode.suggests_names() && round.outcome.is_none() {
+        matching::suggestions(&guess, &props.dex.pokemon, Language::English, SUGGESTIONS)
+    } else {
+        Vec::new()
+    };
+    // nothing to suggest once the guess is already a full name
+    let suggestions = match suggestions.as_slice() {
+        [only] if matching::matches(&guess, only, Language::English) => Vec::new(),
+        _ => suggestions,
+    };
+    let suggestions = (!suggestions.is_empty()).then(|| {
+        html! {
+            <div class="flex gap-2 overflow-x-auto pb-1" aria-label="Suggestions">
+                { for suggestions.iter().map(|entry| {
+                    let name = entry.display_name.clone();
+                    let onclick = {
+                        let guess = guess.clone();
+                        let name = name.clone();
+                        Callback::from(move |_| guess.set(name.clone()))
+                    };
+                    html! {
+                        <button
+                            type="button"
+                            class="shrink-0 cursor-pointer rounded-full border-2 border-blue-200 bg-blue-50 px-3 py-1.5 text-sm hover:border-blue-400"
+                            // keep focus (and the keyboard) on the guess box
+                            onpointerdown={Callback::from(|e: PointerEvent| e.prevent_default())}
+                            {onclick}
+                        >
+                            { name }
+                        </button>
+                    }
+                }) }
+            </div>
+        }
+    });
+
     let strikes = (0..MAX_GUESSES).map(|i| {
         let used = i < round.wrong_guesses.len();
         html! {
@@ -273,24 +306,20 @@ pub fn game(props: &GameProps) -> Html {
                 <input
                     ref={input}
                     type="text"
-                    list={mode.suggests_names().then_some("pokemon-names")}
                     autocomplete="off"
                     autocapitalize="off"
+                    autocorrect="off"
                     spellcheck="false"
+                    enterkeyhint="go"
                     placeholder="Who's that Pokémon?"
                     aria-label="Your guess"
-                    class="min-w-0 flex-1 rounded-lg border-2 border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                    class="min-w-0 flex-1 rounded-lg border-2 border-gray-300 px-3 py-2.5 text-base focus:border-blue-500 focus:outline-none"
                     value={(*guess).clone()}
                     {oninput}
                 />
-                <button type="submit" class="cursor-pointer rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700">
+                <button type="submit" class="cursor-pointer rounded-lg bg-blue-600 px-4 py-2.5 font-semibold text-white hover:bg-blue-700">
                     { "Guess" }
                 </button>
-                if mode.suggests_names() {
-                    <datalist id="pokemon-names">
-                        { for names.iter().map(|name| html! { <option value={name.clone()} /> }) }
-                    </datalist>
-                }
             </form>
         },
         Some(Outcome::Guessed) => html! {
@@ -319,9 +348,11 @@ pub fn game(props: &GameProps) -> Html {
         },
     };
 
+    // on phones: header at the top, guess box pinned to the bottom (above the
+    // keyboard), and the clues in between, scrolling if they don't fit
     html! {
-        <div class="space-y-5">
-            <header class="flex items-center justify-between gap-2">
+        <div class="flex min-h-0 flex-1 flex-col gap-3 md:gap-5">
+            <header class="flex shrink-0 items-center justify-between gap-2">
                 <div>
                     <p class="font-semibold">{ format!("{} · Pokémon #{}", mode.label(), round_number) }</p>
                     <p class="text-sm text-gray-600">{ format!("Score: {}", state.score) }</p>
@@ -337,17 +368,24 @@ pub fn game(props: &GameProps) -> Html {
                 </button>
             </header>
 
-            <Clues
-                key={round.target}
-                entry={entry}
-                clues={round.clues(mode)}
-                facts={round.facts.clone()}
-                revealed={round.outcome.is_some()}
-            />
+            <div class="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-none md:overflow-visible">
+                <div class="my-auto">
+                    <Clues
+                        key={round.target}
+                        entry={entry}
+                        clues={round.clues(mode)}
+                        facts={round.facts.clone()}
+                        revealed={round.outcome.is_some()}
+                    />
+                </div>
+            </div>
 
-            { for feedback }
-            { for wrong_guesses }
-            { controls }
+            <div class="shrink-0 space-y-2 pb-[env(safe-area-inset-bottom)]">
+                { for feedback }
+                { for wrong_guesses }
+                { for suggestions }
+                { controls }
+            </div>
         </div>
     }
 }

@@ -9,7 +9,7 @@ use crate::game::Mode;
 /// How many runs per mode the leaderboard shows, and so never forgets.
 pub const TOP_RUNS: usize = 3;
 
-/// A finished run: rounds played until the first Pokémon that got away.
+/// A finished run.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RunRecord {
     /// Unique per run, so the same run can be synced more than once safely.
@@ -17,7 +17,7 @@ pub struct RunRecord {
     pub mode: Mode,
     pub generations: Vec<u8>,
     pub score: u32,
-    pub rounds_won: u32,
+    pub caught: u32,
     /// Milliseconds since the Unix epoch.
     pub finished_at: f64,
 }
@@ -72,7 +72,7 @@ mod tests {
             mode,
             generations: vec![1],
             score,
-            rounds_won: score,
+            caught: score,
             finished_at,
         }
     }

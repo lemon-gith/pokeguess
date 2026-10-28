@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 pub mod game;
 pub mod language;
 pub mod matching;
+pub mod play;
 pub mod pokedex;
 pub mod runs;
 

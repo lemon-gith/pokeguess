@@ -304,12 +304,9 @@ pub fn game(props: &GameProps) -> Html {
 
     // a faded ball underneath, and the coloured one on top: whole, or half
     let lives = run.slots.iter().zip(run.fills()).map(|(&life, fill)| {
-        let (src, size) = match life {
-            Life::PokeBall => ("img/icons/pokeball.svg", "size-6"),
-            Life::PremierBall => (
-                "img/icons/premier-ball.png",
-                "size-7 [image-rendering:pixelated]",
-            ),
+        let src = match life {
+            Life::PokeBall => "img/icons/pokeball.svg",
+            Life::PremierBall => "img/icons/premier-ball.svg",
         };
         let alt = match fill {
             Fill::Full => "life",
@@ -318,13 +315,13 @@ pub fn game(props: &GameProps) -> Html {
         };
         html! {
             <span class="relative inline-block">
-                <img {src} {alt} class={classes!(size, "opacity-25", "grayscale")} />
+                <img {src} {alt} class="size-6 opacity-25 grayscale" />
                 if fill != Fill::Empty {
                     <img
                         {src}
                         alt=""
                         class={classes!(
-                            size,
+                            "size-6",
                             "absolute",
                             "inset-0",
                             (fill == Fill::Half).then_some("[clip-path:inset(0_50%_0_0)]"),
@@ -478,7 +475,7 @@ pub fn game(props: &GameProps) -> Html {
                             </p>
                             if extra_life {
                                 <p class="flex items-center justify-center gap-2 text-blue-700">
-                                    <img src="img/icons/premier-ball.png" alt="" class="size-7 [image-rendering:pixelated]" />
+                                    <img src="img/icons/premier-ball.svg" alt="" class="size-6" />
                                     { "10 in a row! A Premier Ball restores a life." }
                                 </p>
                             }

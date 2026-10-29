@@ -2,6 +2,7 @@ use shared::game::{Mode, format_generations};
 use shared::runs::{RunRecord, TOP_RUNS, top_runs};
 use yew::prelude::*;
 
+use super::format_score;
 use crate::browser;
 
 #[derive(Properties, PartialEq)]
@@ -44,7 +45,7 @@ pub fn leaderboard(props: &LeaderboardProps) -> Html {
 fn run_row(run: &RunRecord) -> Html {
     html! {
         <li>
-            <span class="font-semibold">{ format!("{} pts", run.score) }</span>
+            <span class="font-semibold">{ format!("{} pts", format_score(run.score)) }</span>
             <span class="text-gray-600">
                 { format!(
                     " · {} caught · Gen {} · {}",

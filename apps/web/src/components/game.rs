@@ -4,20 +4,22 @@ use serde::{Deserialize, Serialize};
 use shared::Language;
 use shared::game::{RunSettings, choose_facts, pick_target};
 use shared::matching;
-use shared::play::{GuessResult, Life, Outcome, Round, Run};
+use shared::play::{Fill, GuessResult, Life, Outcome, Round, Run};
 use shared::pokedex::Pokedex;
 use shared::runs::RunRecord;
 use web_sys::{HtmlButtonElement, HtmlInputElement};
 use yew::prelude::*;
 
 use super::clues::Clues;
+use super::format_score;
+use super::tooltip::TooltipButton;
 use crate::{Dex, browser};
 
 /// Name suggestions shown at once (in the modes that offer them).
 const SUGGESTIONS: usize = 6;
 
 /// Session storage key for the game in progress, so it survives a refresh.
-pub const SAVED_GAME_KEY: &str = "pokeguess.game.v2";
+pub const SAVED_GAME_KEY: &str = "pokeguess.game.v3";
 
 #[derive(Properties, PartialEq)]
 pub struct GameProps {
@@ -144,6 +146,9 @@ impl GameState {
                 score: run.score,
                 caught: run.caught,
                 finished_at: browser::now(),
+                hints_bought: run.hints_bought,
+                ran_away: run.ran_away,
+                half_lives_regained: run.half_lives_regained,
             });
         }
     }
@@ -167,7 +172,7 @@ impl Reducible for GameState {
                     GuessResult::Caught { points, extra_life } => {
                         Some(Feedback::Caught { points, extra_life })
                     }
-                    GuessResult::OutOfLives => None,
+                    GuessResult::Fled => None,
                     GuessResult::Finished => return self,
                 };
             }
@@ -206,6 +211,12 @@ impl Reducible for GameState {
         state.finish_if_over();
         Rc::new(state)
     }
+}
+
+/// A callback that dispatches the action `make` returns.
+fn dispatch<E>(state: &UseReducerHandle<GameState>, make: fn() -> Action) -> Callback<E> {
+    let state = state.clone();
+    Callback::from(move |_| state.dispatch(make()))
 }
 
 #[function_component(Game)]
@@ -272,10 +283,6 @@ pub fn game(props: &GameProps) -> Html {
         return html! { <p>{ "Something went wrong picking a Pokémon." }</p> };
     };
 
-    let dispatch = |make: fn() -> Action| {
-        let state = state.clone();
-        Callback::from(move |_| state.dispatch(make()))
-    };
     let onsubmit = {
         let state = state.clone();
         let guess = guess.clone();
@@ -298,20 +305,34 @@ pub fn game(props: &GameProps) -> Html {
         Callback::from(move |_| on_quit.emit(()))
     };
 
-    let lives = (0..run.max_lives()).map(|i| match run.lives.get(i) {
-        Some(Life::PokeBall) => html! {
-            <img src="img/icons/pokeball.svg" alt="life" class="size-6" />
-        },
-        Some(Life::PremierBall) => html! {
-            <img
-                src="img/icons/premier-ball.png"
-                alt="life won back"
-                class="size-7 [image-rendering:pixelated]"
-            />
-        },
-        None => html! {
-            <img src="img/icons/pokeball.svg" alt="lost life" class="size-6 opacity-25 grayscale" />
-        },
+    // a faded ball underneath, and the coloured one on top: whole, or half
+    let lives = run.slots.iter().zip(run.fills()).map(|(&life, fill)| {
+        let src = match life {
+            Life::PokeBall => "img/icons/pokeball.svg",
+            Life::PremierBall => "img/icons/premier-ball.svg",
+        };
+        let alt = match fill {
+            Fill::Full => "life",
+            Fill::Half => "half a life",
+            Fill::Empty => "lost life",
+        };
+        html! {
+            <span class="relative inline-block">
+                <img {src} {alt} class="size-6 opacity-25 grayscale" />
+                if fill != Fill::Empty {
+                    <img
+                        {src}
+                        alt=""
+                        class={classes!(
+                            "size-6",
+                            "absolute",
+                            "inset-0",
+                            (fill == Fill::Half).then_some("[clip-path:inset(0_50%_0_0)]"),
+                        )}
+                    />
+                }
+            </span>
+        }
     });
 
     let feedback = state.feedback.as_ref().and_then(|feedback| {
@@ -327,6 +348,18 @@ pub fn game(props: &GameProps) -> Html {
     let wrong_guesses = (!round.wrong_guesses.is_empty()).then(|| {
         let names: Vec<String> = round.wrong_guesses.iter().map(|&id| state.name(id)).collect();
         html! { <p class="text-center text-sm text-gray-600">{ format!("Not: {}", names.join(", ")) }</p> }
+    });
+
+    let balls = round.outcome.is_none().then(|| {
+        let balls = match round.balls_left(mode) {
+            1 => "Last ball".to_string(),
+            n => format!("{n} balls left"),
+        };
+        html! {
+            <p class="text-center text-sm text-gray-600">
+                { format!("{balls} · a catch is worth {}", round.catch_points(mode)) }
+            </p>
+        }
     });
 
     let suggestions = if mode.suggests_names() && round.outcome.is_none() {
@@ -367,35 +400,43 @@ pub fn game(props: &GameProps) -> Html {
 
     let controls = match round.outcome {
         None => {
-            let hint_label = if round.hints_left() == 0 {
-                "No hints left"
+            let hint_tooltip = if round.hints_left() == 0 {
+                "No clues left to reveal."
+            } else if !run.can_hint() {
+                "Hints can't use the last of your lives."
+            } else if mode.hint_cost() == 2 {
+                "Reveal the next clue. Costs a life."
             } else {
-                "Hint (−1 life)"
+                "Reveal the next clue. Costs half a life."
             };
             let run_away_ends_run = run.running_away_ends_run();
             html! {
                 <>
                     <div class="flex gap-2">
-                        <button
-                            type="button"
-                            class="flex-1 cursor-pointer rounded-lg border-2 border-blue-600 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent"
-                            disabled={!run.can_hint()}
-                            title={if run.lives.len() <= 1 { "Hints can't use your last life" } else { "Reveal the next clue" }}
-                            onclick={dispatch(|| Action::Hint)}
-                        >
-                            { hint_label }
-                        </button>
-                        <button
-                            type="button"
+                        <TooltipButton
+                            label="Hint"
+                            tooltip={hint_tooltip}
                             class={classes!(
-                                "flex-1", "cursor-pointer", "rounded-lg", "px-3", "py-2", "text-sm", "font-semibold", "text-white",
+                                "cursor-pointer", "rounded-lg", "border-2", "border-blue-600", "px-3", "py-2",
+                                "text-sm", "font-semibold", "text-blue-700", "hover:bg-blue-50",
+                                "disabled:border-gray-300", "disabled:text-gray-400",
+                            )}
+                            disabled={!run.can_hint()}
+                            onclick={dispatch(&state, || Action::Hint)}
+                        />
+                        <TooltipButton
+                            label="Run"
+                            tooltip={if run_away_ends_run {
+                                "Run from this Pokémon. You're on your last life, so this ends the run."
+                            } else {
+                                "Run from this Pokémon. Costs a life."
+                            }}
+                            class={classes!(
+                                "cursor-pointer", "rounded-lg", "px-3", "py-2", "text-sm", "font-semibold", "text-white",
                                 if run_away_ends_run { "bg-red-600 hover:bg-red-700" } else { "bg-blue-600 hover:bg-blue-700" },
                             )}
-                            title={if run_away_ends_run { "Your last life: running away ends the run" } else { "Skip this Pokémon (−1 life)" }}
-                            onclick={dispatch(|| Action::RunAway)}
-                        >
-                            { if run_away_ends_run { "Run (ends the run)" } else { "Run (−1 life)" } }
-                        </button>
+                            onclick={dispatch(&state, || Action::RunAway)}
+                        />
                     </div>
                     <form class="flex gap-2" {onsubmit}>
                         <input
@@ -419,59 +460,82 @@ pub fn game(props: &GameProps) -> Html {
                 </>
             }
         }
-        Some(Outcome::Caught) => {
-            let (points, extra_life) = match state.feedback {
-                Some(Feedback::Caught { points, extra_life }) => (Some(points), extra_life),
-                _ => (None, false),
+        Some(outcome) => {
+            let message = match outcome {
+                Outcome::Caught => {
+                    let (points, extra_life) = match state.feedback {
+                        Some(Feedback::Caught { points, extra_life }) => (Some(points), extra_life),
+                        _ => (None, false),
+                    };
+                    html! {
+                        <>
+                            <p class="text-lg font-semibold text-green-700">
+                                { match points {
+                                    Some(1) => "Got it! +1 point".to_string(),
+                                    Some(points) => format!("Got it! +{points} points"),
+                                    None => "Got it!".to_string(),
+                                } }
+                            </p>
+                            if extra_life {
+                                <p class="flex items-center justify-center gap-2 text-blue-700">
+                                    <img src="img/icons/premier-ball-premium.svg" alt="" class="size-10 shrink-0" />
+                                    { "10 in a row! A Premier Ball restores a life." }
+                                </p>
+                            }
+                        </>
+                    }
+                }
+                Outcome::RanAway => html! {
+                    <p class="text-lg font-semibold text-gray-700">{ "Got away safely!" }</p>
+                },
+                Outcome::Fled => html! {
+                    <p class="text-lg font-semibold text-amber-700">
+                        { format!("Out of balls! {} fled.", entry.display_name) }
+                        if mode.flee_penalty() > 0 {
+                            { format!(" −{} points", mode.flee_penalty()) }
+                        }
+                    </p>
+                },
+            };
+            let next = if run.is_over() {
+                html! {
+                    <>
+                        <p class="text-lg font-semibold text-red-700">{ "Out of lives!" }</p>
+                        <p>{ format!("Run over: {} points, {} caught.", format_score(run.score), run.caught) }</p>
+                        <div class="flex justify-center gap-2">
+                            <button ref={continue_button} type="button" class="cursor-pointer rounded-lg bg-blue-600 px-6 py-2 font-semibold text-white hover:bg-blue-700" onclick={dispatch(&state, || Action::Restart)}>
+                                { "Play again" }
+                            </button>
+                            <button type="button" class="cursor-pointer rounded-lg border-2 border-gray-300 px-6 py-2 font-semibold hover:border-gray-500" onclick={quit.clone()}>
+                                { "Menu" }
+                            </button>
+                        </div>
+                    </>
+                }
+            } else {
+                html! {
+                    <button ref={continue_button} type="button" class="cursor-pointer rounded-lg bg-blue-600 px-6 py-2 font-semibold text-white hover:bg-blue-700" onclick={dispatch(&state, || Action::NextPokemon)}>
+                        { "Next Pokémon" }
+                    </button>
+                }
             };
             html! {
                 <div class="space-y-3 text-center">
-                    <p class="text-lg font-semibold text-green-700">
-                        { match points {
-                            Some(points) => format!("Got it! +{points} points"),
-                            None => "Got it!".to_string(),
-                        } }
-                    </p>
-                    if extra_life {
-                        <p class="flex items-center justify-center gap-2 text-blue-700">
-                            <img src="img/icons/premier-ball.png" alt="" class="size-7 [image-rendering:pixelated]" />
-                            { "10 in a row! A Premier Ball restores a life." }
-                        </p>
-                    }
-                    <button ref={continue_button} type="button" class="cursor-pointer rounded-lg bg-blue-600 px-6 py-2 font-semibold text-white hover:bg-blue-700" onclick={dispatch(|| Action::NextPokemon)}>
-                        { "Next Pokémon" }
-                    </button>
+                    { message }
+                    { next }
                 </div>
             }
         }
-        Some(Outcome::RanAway) => html! {
-            <div class="space-y-3 text-center">
-                <p class="text-lg font-semibold text-gray-700">{ "Got away safely!" }</p>
-                <button ref={continue_button} type="button" class="cursor-pointer rounded-lg bg-blue-600 px-6 py-2 font-semibold text-white hover:bg-blue-700" onclick={dispatch(|| Action::NextPokemon)}>
-                    { "Next Pokémon" }
-                </button>
-            </div>
-        },
-        Some(Outcome::OutOfLives) => html! {
-            <div class="space-y-3 text-center">
-                <p class="text-lg font-semibold text-red-700">{ "Out of lives!" }</p>
-                <p>{ format!("Run over: {} points, {} caught.", run.score, run.caught) }</p>
-                <div class="flex justify-center gap-2">
-                    <button ref={continue_button} type="button" class="cursor-pointer rounded-lg bg-blue-600 px-6 py-2 font-semibold text-white hover:bg-blue-700" onclick={dispatch(|| Action::Restart)}>
-                        { "Play again" }
-                    </button>
-                    <button type="button" class="cursor-pointer rounded-lg border-2 border-gray-300 px-6 py-2 font-semibold hover:border-gray-500" onclick={quit.clone()}>
-                        { "Menu" }
-                    </button>
-                </div>
-            </div>
-        },
     };
 
     let score_line = if mode.earns_lives() && run.streak > 0 {
-        format!("Score: {} · Streak: {}", run.score, run.streak)
+        format!(
+            "Score: {} · Streak: {}",
+            format_score(run.score),
+            run.streak
+        )
     } else {
-        format!("Score: {}", run.score)
+        format!("Score: {}", format_score(run.score))
     };
 
     // on phones: header at the top, guess box pinned to the bottom (above the
@@ -483,7 +547,10 @@ pub fn game(props: &GameProps) -> Html {
                     <p class="font-semibold">{ format!("{} · Pokémon #{}", mode.label(), state.game.number) }</p>
                     <p class="text-sm text-gray-600">{ score_line }</p>
                 </div>
-                <div class="flex items-center gap-1" aria-label={format!("{} lives left", run.lives.len())}>
+                <div class="flex items-center gap-1" aria-label={match run.lives() {
+                    1.0 => "1 life left".to_string(),
+                    lives => format!("{lives} lives left"),
+                }}>
                     { for lives }
                 </div>
                 // hidden rather than removed, so the header doesn't shift
@@ -511,6 +578,7 @@ pub fn game(props: &GameProps) -> Html {
             <div class="shrink-0 space-y-2 pb-[env(safe-area-inset-bottom)]">
                 { for feedback }
                 { for wrong_guesses }
+                { for balls }
                 { for suggestions }
                 { controls }
             </div>

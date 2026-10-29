@@ -475,7 +475,7 @@ pub fn game(props: &GameProps) -> Html {
                             </p>
                             if extra_life {
                                 <p class="flex items-center justify-center gap-2 text-blue-700">
-                                    <img src="img/icons/premier-ball-premium.svg" alt="" class="size-6" />
+                                    <img src="img/icons/premier-ball-premium.svg" alt="" class="size-10 shrink-0" />
                                     { "10 in a row! A Premier Ball restores a life." }
                                 </p>
                             }

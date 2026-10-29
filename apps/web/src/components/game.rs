@@ -146,6 +146,9 @@ impl GameState {
                 score: run.score,
                 caught: run.caught,
                 finished_at: browser::now(),
+                hints_bought: run.hints_bought,
+                ran_away: run.ran_away,
+                half_lives_regained: run.half_lives_regained,
             });
         }
     }

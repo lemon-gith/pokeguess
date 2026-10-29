@@ -20,6 +20,14 @@ pub struct RunRecord {
     pub caught: u32,
     /// Milliseconds since the Unix epoch.
     pub finished_at: f64,
+    #[serde(default)]
+    pub hints_bought: u32,
+    /// Times the player ran away.
+    #[serde(default)]
+    pub ran_away: u32,
+    /// Lives won back with Premier Balls, in halves.
+    #[serde(default)]
+    pub half_lives_regained: u32,
 }
 
 /// Better runs first: higher score, then the earlier of two equal scores.
@@ -74,6 +82,9 @@ mod tests {
             score,
             caught: score.unsigned_abs(),
             finished_at,
+            hints_bought: 0,
+            ran_away: 0,
+            half_lives_regained: 0,
         }
     }
 

@@ -115,6 +115,15 @@ pub struct Run {
     /// away or a Pokémon fleeing.
     pub streak: u32,
     pub round: Round,
+    /// Hints bought over the whole run.
+    #[serde(default)]
+    pub hints_bought: u32,
+    /// Times the player ran away.
+    #[serde(default)]
+    pub ran_away: u32,
+    /// Lives won back with Premier Balls, in halves.
+    #[serde(default)]
+    pub half_lives_regained: u32,
 }
 
 impl Run {
@@ -128,6 +137,9 @@ impl Run {
             caught: 0,
             streak: 0,
             round,
+            hints_bought: 0,
+            ran_away: 0,
+            half_lives_regained: 0,
         }
     }
 
@@ -207,6 +219,7 @@ impl Run {
         }
         self.lose(self.mode.hint_cost());
         self.round.hints += 1;
+        self.hints_bought += 1;
         true
     }
 
@@ -217,6 +230,7 @@ impl Run {
         }
         self.round.outcome = Some(Outcome::RanAway);
         self.streak = 0;
+        self.ran_away += 1;
         self.lose(2);
         true
     }
@@ -244,6 +258,7 @@ impl Run {
         for slot in (before / 2)..self.half_lives.div_ceil(2) {
             self.slots[slot as usize] = Life::PremierBall;
         }
+        self.half_lives_regained += self.half_lives - before;
         self.half_lives > before
     }
 }
@@ -452,6 +467,7 @@ mod tests {
         }
         assert_eq!(run.lives(), 3.0);
         assert_eq!(run.slots[2], Life::PremierBall);
+        assert_eq!(run.half_lives_regained, 1, "only half a life was missing");
 
         // 1.5 → 2.5 refills the half slot and half of the next
         let mut run = self::run(Mode::Normal);
@@ -480,6 +496,27 @@ mod tests {
         catch_and_continue(&mut run);
         run.run_away();
         assert_eq!(run.streak, 0);
+    }
+
+    #[test]
+    fn counts_hints_running_away_and_lives_regained() {
+        let mut run = run(Mode::Normal);
+        run.hint();
+        run.hint();
+        run.run_away(); // 3 − ½ − ½ − 1 = 1
+        assert!(run.next_round(Round::new(TARGET, vec![])));
+        for _ in 0..10 {
+            catch_and_continue(&mut run); // 2
+        }
+        for _ in 0..10 {
+            catch_and_continue(&mut run); // 3
+        }
+        for _ in 0..10 {
+            catch_and_continue(&mut run); // still 3: full
+        }
+        assert_eq!(run.hints_bought, 2);
+        assert_eq!(run.ran_away, 1);
+        assert_eq!(run.half_lives_regained, 4);
     }
 
     #[test]

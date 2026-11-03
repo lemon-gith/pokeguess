@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use shared::Language;
 use shared::game::{RunSettings, choose_facts, pick_target};
 use shared::matching;
-use shared::play::{Fill, GuessResult, Life, Outcome, Round, Run};
+use shared::play::{Fill, GuessResult, Life, Outcome, Restored, Round, Run};
 use shared::pokedex::Pokedex;
 use shared::runs::RunRecord;
 use web_sys::{HtmlButtonElement, HtmlInputElement};
@@ -50,7 +50,13 @@ enum Feedback {
     Unknown(String),
     Repeated(String),
     Wrong(String),
-    Caught { points: u32, extra_life: bool },
+    Caught {
+        points: u32,
+        premier_ball: Option<Restored>,
+    },
+    Fled {
+        premier_ball: Option<Restored>,
+    },
 }
 
 #[derive(Clone)]
@@ -169,10 +175,14 @@ impl Reducible for GameState {
                     GuessResult::Unknown => Some(Feedback::Unknown(text.trim().to_string())),
                     GuessResult::Repeated => Some(Feedback::Repeated(name)),
                     GuessResult::Wrong => Some(Feedback::Wrong(name)),
-                    GuessResult::Caught { points, extra_life } => {
-                        Some(Feedback::Caught { points, extra_life })
-                    }
-                    GuessResult::Fled => None,
+                    GuessResult::Caught {
+                        points,
+                        premier_ball,
+                    } => Some(Feedback::Caught {
+                        points,
+                        premier_ball,
+                    }),
+                    GuessResult::Fled { premier_ball } => Some(Feedback::Fled { premier_ball }),
                     GuessResult::Finished => return self,
                 };
             }
@@ -340,7 +350,7 @@ pub fn game(props: &GameProps) -> Html {
             Feedback::Unknown(text) => format!("Hmm, I don't know a Pokémon called “{text}”."),
             Feedback::Repeated(name) => format!("You've already guessed {name}."),
             Feedback::Wrong(name) => format!("Not {name}!"),
-            Feedback::Caught { .. } => return None,
+            Feedback::Caught { .. } | Feedback::Fled { .. } => return None,
         };
         Some(html! { <p class="text-center text-amber-700" role="status">{ message }</p> })
     });
@@ -429,7 +439,11 @@ pub fn game(props: &GameProps) -> Html {
                             tooltip={if run_away_ends_run {
                                 "Run from this Pokémon. You're on your last life, so this ends the run."
                             } else {
-                                "Run from this Pokémon. Costs a life."
+                                if mode.run_away_cost() == 2 {
+                                    "Run from this Pokémon. Costs a life."
+                                } else {
+                                    "Run from this Pokémon. Costs half a life."
+                                }
                             }}
                             class={classes!(
                                 "cursor-pointer", "rounded-lg", "px-3", "py-2", "text-sm", "font-semibold", "text-white",
@@ -461,28 +475,26 @@ pub fn game(props: &GameProps) -> Html {
             }
         }
         Some(outcome) => {
+            let premier_ball = match state.feedback {
+                Some(Feedback::Caught { premier_ball, .. } | Feedback::Fled { premier_ball }) => {
+                    premier_ball
+                }
+                _ => None,
+            };
             let message = match outcome {
                 Outcome::Caught => {
-                    let (points, extra_life) = match state.feedback {
-                        Some(Feedback::Caught { points, extra_life }) => (Some(points), extra_life),
-                        _ => (None, false),
+                    let points = match state.feedback {
+                        Some(Feedback::Caught { points, .. }) => Some(points),
+                        _ => None,
                     };
                     html! {
-                        <>
-                            <p class="text-lg font-semibold text-green-700">
-                                { match points {
-                                    Some(1) => "Got it! +1 point".to_string(),
-                                    Some(points) => format!("Got it! +{points} points"),
-                                    None => "Got it!".to_string(),
-                                } }
-                            </p>
-                            if extra_life {
-                                <p class="flex items-center justify-center gap-2 text-blue-700">
-                                    <img src="img/icons/premier-ball-premium.svg" alt="" class="size-10 shrink-0" />
-                                    { "10 in a row! A Premier Ball restores a life." }
-                                </p>
-                            }
-                        </>
+                        <p class="text-lg font-semibold text-green-700">
+                            { match points {
+                                Some(1) => "Got it! +1 point".to_string(),
+                                Some(points) => format!("Got it! +{points} points"),
+                                None => "Got it!".to_string(),
+                            } }
+                        </p>
                     }
                 }
                 Outcome::RanAway => html! {
@@ -497,6 +509,17 @@ pub fn game(props: &GameProps) -> Html {
                     </p>
                 },
             };
+            let premier_ball = premier_ball.map(|restored| {
+                html! {
+                    <p class="flex items-center justify-center gap-2 text-blue-700">
+                        <img src="img/icons/premier-ball-premium.svg" alt="" class="size-10 shrink-0" />
+                        { match restored {
+                            Restored::Whole => "A Premier Ball restored a life!",
+                            Restored::Half => "A Premier Ball restored half a life!",
+                        } }
+                    </p>
+                }
+            });
             let next = if run.is_over() {
                 html! {
                     <>
@@ -522,20 +545,11 @@ pub fn game(props: &GameProps) -> Html {
             html! {
                 <div class="space-y-3 text-center">
                     { message }
+                    { for premier_ball }
                     { next }
                 </div>
             }
         }
-    };
-
-    let score_line = if mode.earns_lives() && run.streak > 0 {
-        format!(
-            "Score: {} · Streak: {}",
-            format_score(run.score),
-            run.streak
-        )
-    } else {
-        format!("Score: {}", format_score(run.score))
     };
 
     // on phones: header at the top, guess box pinned to the bottom (above the
@@ -545,7 +559,7 @@ pub fn game(props: &GameProps) -> Html {
             <header class="flex shrink-0 items-center justify-between gap-2">
                 <div>
                     <p class="font-semibold">{ format!("{} · Pokémon #{}", mode.label(), state.game.number) }</p>
-                    <p class="text-sm text-gray-600">{ score_line }</p>
+                    <p class="text-sm text-gray-600">{ format!("Score: {}", format_score(run.score)) }</p>
                 </div>
                 <div class="flex items-center gap-1" aria-label={match run.lives() {
                     1.0 => "1 life left".to_string(),

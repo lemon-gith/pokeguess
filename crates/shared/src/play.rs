@@ -2,21 +2,36 @@
 //!
 //! Each Pokémon gets its mode's balls (guesses). A catch is worth less with
 //! each ball used, and missing with the last one makes the Pokémon flee,
-//! costing a life. Hints cost half a life (a whole one on Expert) and
-//! running away a whole one. The run ends when the lives are gone.
+//! costing a life. Hints and running away cost half a life (a whole one on
+//! Expert). The run ends when the lives are gone.
+//!
+//! Outside Expert, a hidden streak can win lives back with Premier Balls.
+//! It grows with each Pokémon caught on the first ball without a hint, and
+//! loses [`STREAK_PENALTY`] (at most once per Pokémon) for a missed first
+//! ball or a hint, and [`STREAK_PENALTY`] more for running away. When a
+//! Pokémon is caught or flees, a streak of [`STREAK_FOR_PREMIER_BALL`] or
+//! more restores up to a life. A Pokémon fleeing with the last of the lives
+//! only ends the run if the streak is under [`STREAK_TO_SURVIVE`].
 
 use serde::{Deserialize, Serialize};
 
 use crate::game::{CLUES_PER_MODE, Clue, Fact, Mode};
 
-/// Correct first guesses in a row that win back a life (in modes that allow it).
-pub const STREAK_FOR_LIFE: u32 = 10;
+/// Streak needed for a Premier Ball when a Pokémon is caught or flees.
+pub const STREAK_FOR_PREMIER_BALL: u32 = 10;
+
+/// Streak needed to survive a Pokémon fleeing with the last of the lives.
+pub const STREAK_TO_SURVIVE: u32 = 25;
+
+/// What a missed first ball or hint (once per Pokémon), or running away,
+/// takes off the streak.
+pub const STREAK_PENALTY: u32 = 10;
 
 /// What fills a life slot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Life {
     PokeBall,
-    /// A life won back with a streak.
+    /// A life won back with a Premier Ball.
     PremierBall,
 }
 
@@ -36,17 +51,23 @@ pub enum Outcome {
     Fled,
 }
 
+/// How much a Premier Ball restored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Restored {
+    Half,
+    Whole,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuessResult {
     Caught {
         points: u32,
-        /// The catch completed a streak and won back a life.
-        extra_life: bool,
+        premier_ball: Option<Restored>,
     },
     /// Wrong, with balls left.
     Wrong,
     /// Wrong with the last ball: the Pokémon fled.
-    Fled,
+    Fled { premier_ball: Option<Restored> },
     /// Not the name of any Pokémon; costs nothing.
     Unknown,
     /// Already guessed for this Pokémon; costs nothing.
@@ -65,6 +86,9 @@ pub struct Round {
     /// Hints bought for this Pokémon.
     pub hints: usize,
     pub outcome: Option<Outcome>,
+    /// A missed first ball or a hint has already cost the streak.
+    #[serde(default)]
+    pub streak_penalised: bool,
 }
 
 impl Round {
@@ -75,6 +99,7 @@ impl Round {
             wrong_guesses: Vec::new(),
             hints: 0,
             outcome: None,
+            streak_penalised: false,
         }
     }
 
@@ -111,8 +136,7 @@ pub struct Run {
     /// Can go negative on Expert, where fleeing costs points.
     pub score: i32,
     pub caught: u32,
-    /// Pokémon caught first time in a row; reset by a wrong guess, running
-    /// away or a Pokémon fleeing.
+    /// Hidden from the player; see the module docs. Always 0 on Expert.
     pub streak: u32,
     pub round: Round,
     /// Hints bought over the whole run.
@@ -148,6 +172,10 @@ impl Run {
         self.half_lives as f32 / 2.0
     }
 
+    fn max_half_lives(&self) -> u32 {
+        2 * self.slots.len() as u32
+    }
+
     /// How full each life slot is, left to right.
     pub fn fills(&self) -> Vec<Fill> {
         (0..self.slots.len() as u32)
@@ -172,7 +200,7 @@ impl Run {
 
     /// Whether running away now would end the run.
     pub fn running_away_ends_run(&self) -> bool {
-        self.half_lives <= 2
+        self.half_lives <= self.mode.run_away_cost()
     }
 
     /// Plays a guess, given the ID of the Pokémon it named (if any).
@@ -185,31 +213,36 @@ impl Run {
         };
         if id == self.round.target {
             let points = self.round.catch_points(self.mode);
-            let first_try = self.round.wrong_guesses.is_empty();
             self.round.outcome = Some(Outcome::Caught);
             self.score += points as i32;
             self.caught += 1;
-            if first_try {
+            // on the first ball, without a hint
+            if self.mode.earns_lives() && !self.round.streak_penalised {
                 self.streak += 1;
             }
-            let extra_life = first_try
-                && self.mode.earns_lives()
-                && self.streak.is_multiple_of(STREAK_FOR_LIFE)
-                && self.gain_life();
-            return GuessResult::Caught { points, extra_life };
+            let premier_ball = self.premier_ball();
+            return GuessResult::Caught {
+                points,
+                premier_ball,
+            };
         }
         if self.round.wrong_guesses.contains(&id) {
             return GuessResult::Repeated;
         }
         self.round.wrong_guesses.push(id);
-        self.streak = 0;
+        self.penalise_streak_once();
         if self.round.balls_left(self.mode) > 0 {
             return GuessResult::Wrong;
         }
         self.round.outcome = Some(Outcome::Fled);
         self.score -= self.mode.flee_penalty();
-        self.lose(2);
-        GuessResult::Fled
+        let premier_ball = if self.half_lives <= 2 {
+            self.survive_last_flee()
+        } else {
+            self.lose(2);
+            self.premier_ball()
+        };
+        GuessResult::Fled { premier_ball }
     }
 
     /// Spends lives on the next clue. Returns whether it did.
@@ -220,18 +253,21 @@ impl Run {
         self.lose(self.mode.hint_cost());
         self.round.hints += 1;
         self.hints_bought += 1;
+        self.penalise_streak_once();
         true
     }
 
-    /// Spends a life to give up on this Pokémon. Returns whether it did.
+    /// Spends lives to give up on this Pokémon. Returns whether it did.
     pub fn run_away(&mut self) -> bool {
         if self.round.outcome.is_some() {
             return false;
         }
         self.round.outcome = Some(Outcome::RanAway);
-        self.streak = 0;
         self.ran_away += 1;
-        self.lose(2);
+        if self.mode.earns_lives() {
+            self.streak = self.streak.saturating_sub(STREAK_PENALTY);
+        }
+        self.lose(self.mode.run_away_cost());
         true
     }
 
@@ -249,17 +285,71 @@ impl Run {
         self.half_lives = self.half_lives.saturating_sub(halves);
     }
 
-    /// Restores a whole life, up to the starting lives, refilling the slots
-    /// it touches with Premier Balls. Returns whether anything was restored.
-    fn gain_life(&mut self) -> bool {
-        let max = 2 * self.slots.len() as u32;
-        let before = self.half_lives;
-        self.half_lives = (before + 2).min(max);
-        for slot in (before / 2)..self.half_lives.div_ceil(2) {
-            self.slots[slot as usize] = Life::PremierBall;
+    /// A missed first ball or a hint costs the streak, once per Pokémon.
+    fn penalise_streak_once(&mut self) {
+        if self.mode.earns_lives() && !self.round.streak_penalised {
+            self.round.streak_penalised = true;
+            self.streak = self.streak.saturating_sub(STREAK_PENALTY);
         }
-        self.half_lives_regained += self.half_lives - before;
-        self.half_lives > before
+    }
+
+    /// After a catch or flee: with a big enough streak, restores up to a
+    /// life. A whole life uses up the streak; half a life halves it; with
+    /// nothing missing, the streak is kept.
+    fn premier_ball(&mut self) -> Option<Restored> {
+        if !self.mode.earns_lives() || self.streak < STREAK_FOR_PREMIER_BALL {
+            return None;
+        }
+        match self.max_half_lives() - self.half_lives {
+            0 => None,
+            1 => {
+                self.restore(1, self.half_lives);
+                self.streak /= 2;
+                Some(Restored::Half)
+            }
+            _ => {
+                self.restore(2, self.half_lives);
+                self.streak = 0;
+                Some(Restored::Whole)
+            }
+        }
+    }
+
+    /// A Pokémon fleeing with the last of the lives (leaving 0 or −½) ends
+    /// the run, unless the streak can pay for another life.
+    fn survive_last_flee(&mut self) -> Option<Restored> {
+        if !self.mode.earns_lives() || self.streak < STREAK_TO_SURVIVE {
+            self.lose(2);
+            return None;
+        }
+        // lives are unchanged overall: −1 for fleeing, +1 from the Premier Ball
+        let after_fleeing = self.half_lives as i32 - 2;
+        self.half_lives_regained += 2;
+        self.mark_premier_ball(after_fleeing.unsigned_abs());
+        self.streak = 0;
+        Some(Restored::Whole)
+    }
+
+    fn restore(&mut self, halves: u32, before: u32) {
+        self.half_lives += halves;
+        self.half_lives_regained += halves;
+        self.mark_premier_ball(before);
+    }
+
+    /// The ball at floor(|lives before the Premier Ball|) becomes a Premier
+    /// Ball, or the next one if it already is; if both already are, nothing
+    /// changes. `half_lives` is that |lives| in halves.
+    fn mark_premier_ball(&mut self, half_lives: u32) {
+        let index = (half_lives / 2) as usize;
+        if let Some(slot) = self
+            .slots
+            .iter_mut()
+            .skip(index)
+            .take(2)
+            .find(|slot| **slot == Life::PokeBall)
+        {
+            *slot = Life::PremierBall;
+        }
     }
 }
 
@@ -268,15 +358,21 @@ mod tests {
     use super::*;
 
     const TARGET: u16 = 25;
+    const P: Life = Life::PokeBall;
+    const PB: Life = Life::PremierBall;
 
     fn run(mode: Mode) -> Run {
         Run::new(mode, Round::new(TARGET, vec![]))
     }
 
-    /// Catches the current Pokémon and moves on to another.
+    fn next(run: &mut Run) {
+        assert!(run.next_round(Round::new(TARGET, vec![])));
+    }
+
+    /// Catches the current Pokémon (first ball, no hint) and moves on.
     fn catch_and_continue(run: &mut Run) -> GuessResult {
         let result = run.guess(Some(TARGET));
-        assert!(run.next_round(Round::new(TARGET, vec![])));
+        next(run);
         result
     }
 
@@ -285,6 +381,13 @@ mod tests {
         for id in 1..=n {
             run.guess(Some(id));
         }
+    }
+
+    /// Misses with every ball, so the Pokémon flees.
+    fn flee(run: &mut Run) -> GuessResult {
+        let balls = run.mode.balls() as u16;
+        miss(run, balls - 1);
+        run.guess(Some(balls))
     }
 
     #[test]
@@ -310,7 +413,7 @@ mod tests {
                     run.guess(Some(TARGET)),
                     GuessResult::Caught {
                         points: expected,
-                        extra_life: false
+                        premier_ball: None
                     },
                     "{mode:?} after {wrong} wrong"
                 );
@@ -331,11 +434,10 @@ mod tests {
     #[test]
     fn missing_with_every_ball_makes_it_flee() {
         let mut run = run(Mode::Normal);
-        miss(&mut run, 4);
-        assert_eq!(run.guess(Some(99)), GuessResult::Fled);
+        assert_eq!(flee(&mut run), GuessResult::Fled { premier_ball: None });
         assert_eq!(run.round.outcome, Some(Outcome::Fled));
         assert_eq!((run.lives(), run.score), (2.0, 0));
-        assert!(run.next_round(Round::new(1, vec![])));
+        next(&mut run);
     }
 
     #[test]
@@ -344,7 +446,7 @@ mod tests {
         assert_eq!(run.guess(Some(1)), GuessResult::Wrong);
         assert_eq!(run.guess(Some(2)), GuessResult::Wrong);
         assert_eq!(run.score, 0, "only fleeing costs points");
-        assert_eq!(run.guess(Some(3)), GuessResult::Fled);
+        assert_eq!(run.guess(Some(3)), GuessResult::Fled { premier_ball: None });
         assert_eq!((run.lives(), run.score), (2.0, -2));
     }
 
@@ -363,15 +465,6 @@ mod tests {
         let mut run = self::run(Mode::Expert);
         assert!(run.hint());
         assert_eq!(run.lives(), 2.0);
-    }
-
-    #[test]
-    fn hint_then_run_leaves_one_and_a_half() {
-        let mut run = run(Mode::Normal);
-        run.hint();
-        run.run_away();
-        assert_eq!(run.lives(), 1.5);
-        assert_eq!(run.fills(), [Fill::Full, Fill::Half, Fill::Empty]);
     }
 
     #[test]
@@ -400,30 +493,32 @@ mod tests {
     }
 
     #[test]
-    fn running_away_ends_the_run_at_one_life_or_less() {
+    fn running_away_costs_what_a_hint_does() {
+        let mut run = self::run(Mode::Normal);
+        assert!(run.run_away());
+        assert_eq!(run.round.outcome, Some(Outcome::RanAway));
+        assert_eq!((run.lives(), run.score), (2.5, 0));
+        next(&mut run);
+
+        let mut run = self::run(Mode::Expert);
+        run.run_away();
+        assert_eq!(run.lives(), 2.0);
+    }
+
+    #[test]
+    fn running_away_ends_the_run_on_the_last_of_the_lives() {
         let mut run = run(Mode::Normal);
-        run.half_lives = 3;
-        assert!(!run.running_away_ends_run());
         run.half_lives = 2;
+        assert!(!run.running_away_ends_run());
+        run.half_lives = 1;
         assert!(run.running_away_ends_run());
         assert!(run.run_away());
         assert!(run.is_over());
         assert!(!run.next_round(Round::new(1, vec![])));
 
-        // half a life left: running away still just ends the run
-        let mut run = self::run(Mode::Normal);
-        run.half_lives = 1;
-        run.run_away();
-        assert_eq!(run.half_lives, 0);
-    }
-
-    #[test]
-    fn fleeing_on_the_last_life_ends_the_run() {
-        let mut run = run(Mode::Expert);
+        let mut run = self::run(Mode::Expert);
         run.half_lives = 2;
-        miss(&mut run, 3);
-        assert!(run.is_over());
-        assert_eq!(run.guess(Some(TARGET)), GuessResult::Finished);
+        assert!(run.running_away_ends_run());
     }
 
     #[test]
@@ -435,67 +530,239 @@ mod tests {
         assert_eq!(run.round.balls_left(Mode::Expert), 2);
     }
 
+    // the hidden streak
+
     #[test]
-    fn a_streak_of_ten_first_try_catches_wins_back_a_premier_ball() {
+    fn only_clean_first_ball_catches_grow_the_streak() {
         let mut run = run(Mode::Normal);
-        run.run_away();
-        assert!(run.next_round(Round::new(TARGET, vec![])));
-        for _ in 0..9 {
+        catch_and_continue(&mut run);
+        assert_eq!(run.streak, 1);
+        // full lives don't stop it counting
+        for _ in 0..20 {
             catch_and_continue(&mut run);
         }
-        assert_eq!(run.lives(), 2.0);
+        assert_eq!(run.streak, 21);
+
+        let mut run = self::run(Mode::Normal);
+        run.streak = 15;
+        run.guess(Some(1));
+        run.guess(Some(TARGET));
+        assert_eq!(run.streak, 5, "−10 for the miss, nothing for the catch");
+    }
+
+    #[test]
+    fn misses_and_hints_cost_the_streak_once_per_pokemon() {
+        let mut run = run(Mode::Normal);
+        run.streak = 40;
+        run.hint();
+        assert_eq!(run.streak, 30);
+        miss(&mut run, 3);
+        run.hint();
+        assert_eq!(run.streak, 30, "still once for this Pokémon");
+
+        // on full lives (so no Premier Ball), the next Pokémon costs it again
+        let mut run = self::run(Mode::Normal);
+        run.streak = 40;
+        miss(&mut run, 2);
+        run.guess(Some(TARGET));
+        next(&mut run);
+        run.guess(Some(1));
+        assert_eq!(run.streak, 20);
+    }
+
+    #[test]
+    fn running_away_costs_the_streak_ten_more() {
+        let mut run = run(Mode::Normal);
+        run.streak = 40;
+        run.run_away();
+        assert_eq!(run.streak, 30);
+        next(&mut run);
+        run.guess(Some(1));
+        run.run_away();
+        assert_eq!(run.streak, 10, "−10 for the miss and −10 for running away");
+    }
+
+    #[test]
+    fn the_streak_never_goes_below_zero() {
+        let mut run = run(Mode::Normal);
+        run.streak = 4;
+        run.guess(Some(1));
+        assert_eq!(run.streak, 0);
+        run.run_away();
+        assert_eq!(run.streak, 0);
+    }
+
+    #[test]
+    fn expert_has_no_streak() {
+        let mut run = run(Mode::Expert);
+        run.hint();
+        for _ in 0..30 {
+            catch_and_continue(&mut run);
+        }
+        assert_eq!((run.streak, run.lives()), (0, 2.0));
+    }
+
+    // Premier Balls
+
+    #[test]
+    fn a_catch_with_a_streak_of_ten_restores_a_whole_life() {
+        let mut run = run(Mode::Normal);
+        run.run_away(); // 2.5
+        next(&mut run);
+        run.run_away(); // 2
+        next(&mut run);
+        run.streak = 9;
+        assert_eq!(
+            run.guess(Some(TARGET)),
+            GuessResult::Caught {
+                points: 8,
+                premier_ball: Some(Restored::Whole)
+            }
+        );
+        assert_eq!((run.lives(), run.streak), (3.0, 0));
+        // floor(2) = slot 2 becomes the Premier Ball
+        assert_eq!(run.slots, [P, P, PB]);
+        assert_eq!(run.half_lives_regained, 2);
+    }
+
+    #[test]
+    fn half_a_life_missing_restores_half_and_halves_the_streak() {
+        let mut run = run(Mode::Normal);
+        run.hint(); // 2.5, streak −10 (from 0)
+        run.guess(Some(TARGET));
+        next(&mut run);
+        run.streak = 14;
+        assert_eq!(
+            run.guess(Some(TARGET)),
+            GuessResult::Caught {
+                points: 8,
+                premier_ball: Some(Restored::Half)
+            }
+        );
+        assert_eq!((run.lives(), run.streak), (3.0, 7));
+        assert_eq!(run.slots, [P, P, PB]);
+        assert_eq!(run.half_lives_regained, 1);
+    }
+
+    #[test]
+    fn full_lives_keep_the_streak() {
+        let mut run = run(Mode::Normal);
+        run.streak = 30;
         assert_eq!(
             catch_and_continue(&mut run),
             GuessResult::Caught {
                 points: 8,
-                extra_life: true
+                premier_ball: None
             }
         );
-        assert_eq!(run.lives(), 3.0);
-        assert_eq!(
-            run.slots,
-            [Life::PokeBall, Life::PokeBall, Life::PremierBall]
-        );
+        assert_eq!(run.streak, 31);
+        assert_eq!(run.slots, [P; 3]);
     }
 
     #[test]
-    fn a_premier_ball_tops_up_a_half_life() {
+    fn no_premier_ball_under_ten_or_for_running_away() {
         let mut run = run(Mode::Normal);
-        run.hint(); // 2.5
-        for _ in 0..10 {
-            catch_and_continue(&mut run);
-        }
-        assert_eq!(run.lives(), 3.0);
-        assert_eq!(run.slots[2], Life::PremierBall);
-        assert_eq!(run.half_lives_regained, 1, "only half a life was missing");
-
-        // 1.5 → 2.5 refills the half slot and half of the next
-        let mut run = self::run(Mode::Normal);
-        run.half_lives = 3;
-        for _ in 0..10 {
-            catch_and_continue(&mut run);
-        }
-        assert_eq!(run.fills(), [Fill::Full, Fill::Full, Fill::Half]);
-        assert_eq!(
-            run.slots,
-            [Life::PokeBall, Life::PremierBall, Life::PremierBall]
-        );
-    }
-
-    #[test]
-    fn hints_dont_break_a_streak_but_anything_else_does() {
-        let mut run = run(Mode::Normal);
-        run.hint();
-        catch_and_continue(&mut run);
-        assert_eq!(run.streak, 1);
-        // a catch after a wrong guess still counts as a catch, not a streak
-        run.guess(Some(1));
-        assert_eq!(run.streak, 0);
-        catch_and_continue(&mut run);
-        assert_eq!((run.streak, run.caught), (0, 2));
-        catch_and_continue(&mut run);
+        run.half_lives = 4;
+        run.streak = 8;
+        run.guess(Some(TARGET)); // 9
+        assert_eq!(run.lives(), 2.0);
+        next(&mut run);
+        run.streak = 50;
         run.run_away();
-        assert_eq!(run.streak, 0);
+        assert_eq!(run.lives(), 1.5, "running away is never refunded");
+    }
+
+    #[test]
+    fn a_flee_is_refunded_with_ten_left_after_the_miss() {
+        // your example: 2.5 lives and a streak of 32 (22 after the missed
+        // first ball): fleeing leaves 1.5, so floor(1.5) = slot 1 is replaced
+        let mut run = run(Mode::Normal);
+        run.half_lives = 5;
+        run.streak = 32;
+        assert_eq!(
+            flee(&mut run),
+            GuessResult::Fled {
+                premier_ball: Some(Restored::Whole)
+            }
+        );
+        assert_eq!((run.lives(), run.streak), (2.5, 0));
+        assert_eq!(run.slots, [P, PB, P]);
+        assert_eq!(run.fills(), [Fill::Full, Fill::Full, Fill::Half]);
+
+        // if slot 1 is already a Premier Ball, slot 2 is replaced instead
+        let mut run = self::run(Mode::Normal);
+        run.half_lives = 5;
+        run.slots = vec![P, PB, P];
+        run.streak = 32;
+        flee(&mut run);
+        assert_eq!(run.slots, [P, PB, PB]);
+    }
+
+    #[test]
+    fn two_premier_balls_in_a_row_are_left_alone() {
+        let mut run = run(Mode::Normal);
+        run.half_lives = 3;
+        run.slots = vec![P, PB, PB];
+        run.streak = 20;
+        flee(&mut run); // 1.5 → 0.5 → 1.5: slot 0 is the floor, and a Poké Ball
+        assert_eq!(run.slots, [PB, PB, PB]);
+
+        let mut run = self::run(Mode::Easy);
+        run.half_lives = 5;
+        run.slots = vec![P, P, PB, PB, P];
+        run.streak = 20;
+        flee(&mut run); // 2.5 → 1.5: slot 1 is a Poké Ball
+        assert_eq!(run.slots, [P, PB, PB, PB, P]);
+
+        let mut run = self::run(Mode::Easy);
+        run.half_lives = 7;
+        run.slots = vec![P, P, PB, PB, P];
+        run.streak = 20;
+        flee(&mut run); // 3.5 → 2.5: slots 2 and 3 are both Premier Balls
+        assert_eq!(run.slots, [P, P, PB, PB, P]);
+        assert_eq!(run.lives(), 3.5, "the life still comes back");
+    }
+
+    #[test]
+    fn a_flee_isnt_refunded_once_the_miss_takes_the_streak_under_ten() {
+        let mut run = run(Mode::Normal);
+        run.streak = 15;
+        assert_eq!(flee(&mut run), GuessResult::Fled { premier_ball: None });
+        assert_eq!((run.lives(), run.streak), (2.0, 5));
+    }
+
+    #[test]
+    fn a_streak_of_25_survives_fleeing_with_the_last_life() {
+        let mut run = run(Mode::Normal);
+        run.half_lives = 2;
+        run.streak = 35; // 25 after the miss
+        assert_eq!(
+            flee(&mut run),
+            GuessResult::Fled {
+                premier_ball: Some(Restored::Whole)
+            }
+        );
+        assert!(!run.is_over());
+        assert_eq!((run.lives(), run.streak), (1.0, 0));
+        assert_eq!(run.slots, [PB, P, P], "floor(|0|) = slot 0");
+        assert_eq!(run.half_lives_regained, 2);
+        next(&mut run);
+
+        // half a life left: −0.5 + 1 = 0.5, and floor(|−0.5|) = slot 0
+        let mut run = self::run(Mode::Normal);
+        run.half_lives = 1;
+        run.streak = 35;
+        flee(&mut run);
+        assert_eq!((run.lives(), run.slots[0]), (0.5, PB));
+    }
+
+    #[test]
+    fn under_25_fleeing_with_the_last_life_ends_the_run() {
+        let mut run = run(Mode::Normal);
+        run.half_lives = 2;
+        run.streak = 34; // 24 after the miss
+        assert_eq!(flee(&mut run), GuessResult::Fled { premier_ball: None });
+        assert!(run.is_over());
     }
 
     #[test]
@@ -503,39 +770,15 @@ mod tests {
         let mut run = run(Mode::Normal);
         run.hint();
         run.hint();
-        run.run_away(); // 3 − ½ − ½ − 1 = 1
-        assert!(run.next_round(Round::new(TARGET, vec![])));
-        for _ in 0..10 {
-            catch_and_continue(&mut run); // 2
-        }
-        for _ in 0..10 {
-            catch_and_continue(&mut run); // 3
-        }
-        for _ in 0..10 {
-            catch_and_continue(&mut run); // still 3: full
-        }
+        run.run_away(); // 3 − ½ − ½ − ½ = 1.5
+        next(&mut run);
+        run.streak = 20;
+        catch_and_continue(&mut run); // +1 = 2.5, streak 0
+        run.streak = 20;
+        catch_and_continue(&mut run); // +½ = 3, streak 10
         assert_eq!(run.hints_bought, 2);
         assert_eq!(run.ran_away, 1);
-        assert_eq!(run.half_lives_regained, 4);
-    }
-
-    #[test]
-    fn streaks_never_go_past_the_starting_lives() {
-        let mut run = run(Mode::Normal);
-        for _ in 0..10 {
-            catch_and_continue(&mut run);
-        }
+        assert_eq!(run.half_lives_regained, 3);
         assert_eq!(run.lives(), 3.0);
-        assert_eq!(run.slots, [Life::PokeBall; 3]);
-    }
-
-    #[test]
-    fn expert_never_wins_lives_back() {
-        let mut run = run(Mode::Expert);
-        run.hint();
-        for _ in 0..10 {
-            catch_and_continue(&mut run);
-        }
-        assert_eq!(run.lives(), 2.0);
     }
 }

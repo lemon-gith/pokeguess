@@ -93,7 +93,12 @@ impl Mode {
         }
     }
 
-    /// Whether a catch streak can win back a life.
+    /// What running away costs, in half lives: the same as a hint.
+    pub fn run_away_cost(self) -> u32 {
+        self.hint_cost()
+    }
+
+    /// Whether the hidden streak can win back lives with Premier Balls.
     pub fn earns_lives(self) -> bool {
         self != Mode::Expert
     }

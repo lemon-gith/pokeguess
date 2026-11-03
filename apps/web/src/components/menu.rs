@@ -2,6 +2,7 @@ use shared::game::{Mode, RunSettings};
 use shared::runs::RunRecord;
 use yew::prelude::*;
 
+use super::history::History;
 use super::leaderboard::Leaderboard;
 use crate::Dex;
 
@@ -11,7 +12,11 @@ pub struct MenuProps {
     /// Where the pickers start.
     pub settings: RunSettings,
     pub runs: Vec<RunRecord>,
+    /// Ongoing runs whose game is saved on this device.
+    pub resumable: Vec<String>,
     pub on_start: Callback<RunSettings>,
+    pub on_resume: Callback<String>,
+    pub on_archive: Callback<(String, bool)>,
 }
 
 const CHOICE: &str = "cursor-pointer rounded-lg border-2 px-3 py-2 transition";
@@ -136,6 +141,13 @@ pub fn menu(props: &MenuProps) -> Html {
             </div>
 
             <Leaderboard runs={props.runs.clone()} />
+
+            <History
+                runs={props.runs.clone()}
+                resumable={props.resumable.clone()}
+                on_resume={props.on_resume.clone()}
+                on_archive={props.on_archive.clone()}
+            />
         </div>
     }
 }

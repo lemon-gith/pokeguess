@@ -2,7 +2,7 @@ use shared::game::{Mode, format_generations};
 use shared::runs::{RunRecord, TOP_RUNS, top_runs};
 use yew::prelude::*;
 
-use super::format_score;
+use super::{format_score, premier_balls};
 use crate::browser;
 
 #[derive(Properties, PartialEq)]
@@ -46,12 +46,14 @@ fn run_row(run: &RunRecord) -> Html {
     html! {
         <li>
             <span class="font-semibold">{ format!("{} pts", format_score(run.score)) }</span>
+            { " " }
+            { premier_balls(run.premier_balls) }
             <span class="text-gray-600">
                 { format!(
                     " · {} caught · Gen {} · {}",
                     run.caught,
                     format_generations(&run.generations),
-                    browser::format_date(run.finished_at),
+                    browser::format_date(run.finished_at.unwrap_or_else(|| run.sort_time())),
                 ) }
             </span>
         </li>

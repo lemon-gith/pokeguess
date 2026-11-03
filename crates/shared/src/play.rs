@@ -148,6 +148,12 @@ pub struct Run {
     /// Lives won back with Premier Balls, in halves.
     #[serde(default)]
     pub half_lives_regained: u32,
+    /// Premier Balls won.
+    #[serde(default)]
+    pub premier_balls: u32,
+    /// Pokémon that fled after the last ball.
+    #[serde(default)]
+    pub fled: u32,
 }
 
 impl Run {
@@ -164,6 +170,8 @@ impl Run {
             hints_bought: 0,
             ran_away: 0,
             half_lives_regained: 0,
+            premier_balls: 0,
+            fled: 0,
         }
     }
 
@@ -235,6 +243,7 @@ impl Run {
             return GuessResult::Wrong;
         }
         self.round.outcome = Some(Outcome::Fled);
+        self.fled += 1;
         self.score -= self.mode.flee_penalty();
         let premier_ball = if self.half_lives <= 2 {
             self.survive_last_flee()
@@ -325,6 +334,7 @@ impl Run {
         // lives are unchanged overall: −1 for fleeing, +1 from the Premier Ball
         let after_fleeing = self.half_lives as i32 - 2;
         self.half_lives_regained += 2;
+        self.premier_balls += 1;
         self.mark_premier_ball(after_fleeing.unsigned_abs());
         self.streak = 0;
         Some(Restored::Whole)
@@ -333,6 +343,7 @@ impl Run {
     fn restore(&mut self, halves: u32, before: u32) {
         self.half_lives += halves;
         self.half_lives_regained += halves;
+        self.premier_balls += 1;
         self.mark_premier_ball(before);
     }
 
@@ -779,6 +790,27 @@ mod tests {
         assert_eq!(run.hints_bought, 2);
         assert_eq!(run.ran_away, 1);
         assert_eq!(run.half_lives_regained, 3);
+        assert_eq!(run.premier_balls, 2);
         assert_eq!(run.lives(), 3.0);
+    }
+
+    #[test]
+    fn counts_pokemon_that_fled() {
+        let mut run = run(Mode::Normal);
+        flee(&mut run);
+        next(&mut run);
+        run.run_away();
+        next(&mut run);
+        flee(&mut run);
+        assert_eq!(run.fled, 2);
+    }
+
+    #[test]
+    fn surviving_the_last_flee_counts_as_a_premier_ball() {
+        let mut run = run(Mode::Normal);
+        run.half_lives = 2;
+        run.streak = 35;
+        flee(&mut run);
+        assert_eq!((run.premier_balls, run.fled), (1, 1));
     }
 }

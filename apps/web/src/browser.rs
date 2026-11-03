@@ -31,6 +31,22 @@ pub fn format_date(millis: f64) -> String {
     date.to_locale_date_string("en-GB", &options).into()
 }
 
+/// A date and time like "27 Oct 2026, 14:05".
+pub fn format_date_time(millis: f64) -> String {
+    let date = js_sys::Date::new(&millis.into());
+    let options = js_sys::Object::new();
+    for (key, value) in [
+        ("day", "numeric"),
+        ("month", "short"),
+        ("year", "numeric"),
+        ("hour", "2-digit"),
+        ("minute", "2-digit"),
+    ] {
+        let _ = js_sys::Reflect::set(&options, &key.into(), &value.into());
+    }
+    date.to_locale_string("en-GB", &options).into()
+}
+
 /// Starts downloading an image so it shows instantly later.
 pub fn prefetch_image(url: &str) {
     if let Ok(image) = HtmlImageElement::new() {

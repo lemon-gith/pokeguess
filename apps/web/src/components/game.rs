@@ -6,7 +6,7 @@ use shared::game::{RunSettings, choose_facts, pick_target};
 use shared::matching;
 use shared::play::{Fill, GuessResult, Life, Outcome, Restored, Round, Run};
 use shared::pokedex::Pokedex;
-use shared::runs::RunRecord;
+use shared::runs::{RunRecord, Status};
 use web_sys::{HtmlButtonElement, HtmlInputElement};
 use yew::prelude::*;
 
@@ -18,22 +18,31 @@ use crate::{Dex, browser};
 /// Name suggestions shown at once (in the modes that offer them).
 const SUGGESTIONS: usize = 6;
 
-/// Session storage key for the game in progress, so it survives a refresh.
-pub const SAVED_GAME_KEY: &str = "pokeguess.game.v3";
+/// How a game begins.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Start {
+    New(RunSettings),
+    Resume(Box<SavedGame>),
+}
 
 #[derive(Properties, PartialEq)]
 pub struct GameProps {
     pub dex: Dex,
-    pub settings: RunSettings,
-    /// Called once when a run ends, with its record.
-    pub on_finish: Callback<RunRecord>,
-    /// Back to the menu, without saving the run.
+    pub start: Start,
+    /// Called with the game whenever it changes, including when it starts
+    /// and when it ends.
+    pub on_save: Callback<SavedGame>,
+    /// Back to the menu. The run stays saved, so it can be resumed.
     pub on_quit: Callback<()>,
 }
 
-/// Everything about a game in progress that survives a page refresh.
+/// Everything about a game, so it can be resumed later.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SavedGame {
+    /// Also the ID of its [`RunRecord`].
+    pub id: String,
+    /// Milliseconds since the Unix epoch.
+    pub started_at: f64,
     pub settings: RunSettings,
     /// Targets already used this run, so they don't come up again.
     seen: Vec<u16>,
@@ -41,7 +50,42 @@ pub struct SavedGame {
     next: Option<u16>,
     /// Which Pokémon of the run this is, counting from 1.
     number: u32,
-    run: Run,
+    pub run: Run,
+}
+
+impl SavedGame {
+    /// The run's record; complete once `finished_at` is set.
+    pub fn record(&self, finished_at: Option<f64>) -> RunRecord {
+        let run = &self.run;
+        RunRecord {
+            id: self.id.clone(),
+            mode: run.mode,
+            generations: self.settings.generations.clone(),
+            score: run.score,
+            caught: run.caught,
+            started_at: Some(self.started_at),
+            finished_at,
+            status: if finished_at.is_some() {
+                Status::Complete
+            } else {
+                Status::Ongoing
+            },
+            hints_bought: run.hints_bought,
+            ran_away: run.ran_away,
+            fled: run.fled,
+            premier_balls: run.premier_balls,
+            half_lives_regained: run.half_lives_regained,
+        }
+    }
+
+    /// Nothing has been played yet: no guesses, hints or running away.
+    pub fn is_untouched(&self) -> bool {
+        let round = &self.run.round;
+        self.number == 1
+            && round.wrong_guesses.is_empty()
+            && round.hints == 0
+            && round.outcome.is_none()
+    }
 }
 
 /// What the last action did, if it needs a message.
@@ -65,8 +109,6 @@ struct GameState {
     pool: Vec<u16>,
     game: SavedGame,
     feedback: Option<Feedback>,
-    /// Set when the run ends.
-    finished: Option<RunRecord>,
 }
 
 enum Action {
@@ -102,6 +144,8 @@ impl GameState {
         let run = Run::new(settings.mode, new_round(&dex, target));
         Self {
             game: SavedGame {
+                id: browser::unique_id(),
+                started_at: browser::now(),
                 settings,
                 seen: vec![target],
                 next,
@@ -111,28 +155,24 @@ impl GameState {
             dex,
             pool,
             feedback: None,
-            finished: None,
         }
     }
 
-    /// The game saved in this tab, if it's for these settings and still
-    /// playable, otherwise a new one.
-    fn restore_or_new(dex: Dex, settings: RunSettings) -> Self {
-        match browser::load_session::<SavedGame>(SAVED_GAME_KEY) {
-            Some(game)
-                if game.settings == settings
-                    && !game.run.is_over()
-                    && dex.get(game.run.round.target).is_some() =>
+    /// A new game, or a saved one if it's still playable.
+    fn start(dex: Dex, start: Start) -> Self {
+        match start {
+            Start::New(settings) => Self::new(dex, settings),
+            Start::Resume(game)
+                if !game.run.is_over() && dex.get(game.run.round.target).is_some() =>
             {
                 Self {
-                    pool: pool(&dex, &settings),
+                    pool: pool(&dex, &game.settings),
                     dex,
-                    game,
+                    game: *game,
                     feedback: None,
-                    finished: None,
                 }
             }
-            _ => Self::new(dex, settings),
+            Start::Resume(game) => Self::new(dex, game.settings),
         }
     }
 
@@ -140,23 +180,6 @@ impl GameState {
         self.dex
             .get(id)
             .map_or_else(|| format!("#{id}"), |p| p.display_name.clone())
-    }
-
-    fn finish_if_over(&mut self) {
-        let run = &self.game.run;
-        if run.is_over() && self.finished.is_none() {
-            self.finished = Some(RunRecord {
-                id: browser::unique_id(),
-                mode: run.mode,
-                generations: self.game.settings.generations.clone(),
-                score: run.score,
-                caught: run.caught,
-                finished_at: browser::now(),
-                hints_bought: run.hints_bought,
-                ran_away: run.ran_away,
-                half_lives_regained: run.half_lives_regained,
-            });
-        }
     }
 }
 
@@ -218,7 +241,6 @@ impl Reducible for GameState {
                 return Rc::new(GameState::new(state.dex, state.game.settings));
             }
         }
-        state.finish_if_over();
         Rc::new(state)
     }
 }
@@ -233,29 +255,17 @@ fn dispatch<E>(state: &UseReducerHandle<GameState>, make: fn() -> Action) -> Cal
 pub fn game(props: &GameProps) -> Html {
     let state = {
         let dex = props.dex.clone();
-        let settings = props.settings.clone();
-        use_reducer(move || GameState::restore_or_new(dex, settings))
+        let start = props.start.clone();
+        use_reducer(move || GameState::start(dex, start))
     };
     let guess = use_state(String::new);
     let input = use_node_ref();
     let continue_button = use_node_ref();
 
-    // keep the game in this tab's storage until it ends
-    use_effect_with(state.game.clone(), |game| {
-        if game.run.is_over() {
-            browser::forget_session(SAVED_GAME_KEY);
-        } else {
-            browser::save_session(SAVED_GAME_KEY, game);
-        }
-    });
-    // report the run once it ends
+    // save after every change, so the run can be resumed
     {
-        let on_finish = props.on_finish.clone();
-        use_effect_with(state.finished.clone(), move |finished| {
-            if let Some(run) = finished {
-                on_finish.emit(run.clone());
-            }
-        });
+        let on_save = props.on_save.clone();
+        use_effect_with(state.game.clone(), move |game| on_save.emit(game.clone()));
     }
     // download the next Pokémon's picture in advance
     {
@@ -293,12 +303,19 @@ pub fn game(props: &GameProps) -> Html {
         return html! { <p>{ "Something went wrong picking a Pokémon." }</p> };
     };
 
+    // where names are suggested, only a real name can be guessed, which
+    // catches typos; in the harder modes, spelling is up to the player
+    let can_guess = if mode.suggests_names() {
+        matching::find(&guess, &props.dex.pokemon, Language::English).is_some()
+    } else {
+        !guess.trim().is_empty()
+    };
     let onsubmit = {
         let state = state.clone();
         let guess = guess.clone();
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
-            if !guess.trim().is_empty() {
+            if can_guess {
                 state.dispatch(Action::Guess((*guess).clone()));
                 guess.set(String::new());
             }
@@ -387,10 +404,17 @@ pub fn game(props: &GameProps) -> Html {
             <div class="flex gap-2 overflow-x-auto pb-1" aria-label="Suggestions">
                 { for suggestions.iter().map(|entry| {
                     let name = entry.display_name.clone();
+                    // back to the guess box, so Enter guesses it
                     let onclick = {
                         let guess = guess.clone();
+                        let input = input.clone();
                         let name = name.clone();
-                        Callback::from(move |_| guess.set(name.clone()))
+                        Callback::from(move |_| {
+                            guess.set(name.clone());
+                            if let Some(input) = input.cast::<HtmlInputElement>() {
+                                let _ = input.focus();
+                            }
+                        })
                     };
                     html! {
                         <button
@@ -452,7 +476,10 @@ pub fn game(props: &GameProps) -> Html {
                             onclick={dispatch(&state, || Action::RunAway)}
                         />
                     </div>
-                    <form class="flex gap-2" {onsubmit}>
+                    // input, suggestions, then Guess, which is also the tab
+                    // order; the suggestions sit below the row, in space kept
+                    // for them, so they come and go without moving anything
+                    <form class="grid grid-cols-[minmax(0,1fr)_auto] gap-2" {onsubmit}>
                         <input
                             ref={input}
                             type="text"
@@ -463,11 +490,18 @@ pub fn game(props: &GameProps) -> Html {
                             enterkeyhint="go"
                             placeholder="Who's that Pokémon?"
                             aria-label="Your guess"
-                            class="min-w-0 flex-1 rounded-lg border-2 border-gray-300 px-3 py-2.5 text-base focus:border-blue-500 focus:outline-none"
+                            class="col-start-1 row-start-1 min-w-0 rounded-lg border-2 border-gray-300 px-3 py-2.5 text-base focus:border-blue-500 focus:outline-none"
                             value={(*guess).clone()}
                             {oninput}
                         />
-                        <button type="submit" class="cursor-pointer rounded-lg bg-blue-600 px-4 py-2.5 font-semibold text-white hover:bg-blue-700">
+                        if mode.suggests_names() {
+                            <div class="col-span-2 row-start-2 min-h-10">{ for suggestions }</div>
+                        }
+                        <button
+                            type="submit"
+                            class="col-start-2 row-start-1 cursor-pointer rounded-lg bg-blue-600 px-4 py-2.5 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                            disabled={!can_guess}
+                        >
                             { "Guess" }
                         </button>
                     </form>
@@ -593,7 +627,6 @@ pub fn game(props: &GameProps) -> Html {
                 { for feedback }
                 { for wrong_guesses }
                 { for balls }
-                { for suggestions }
                 { controls }
             </div>
         </div>

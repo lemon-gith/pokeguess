@@ -10,5 +10,7 @@ Which also provided all the relevant `link` attributes.
 
 ## Premier Ball
 
-- [premier-ball.png](premier-ball.png), shown for a life won back with a streak
-  - The item sprite from [PokeAPI/sprites](https://github.com/PokeAPI/sprites/blob/master/sprites/items/premier-ball.png), taken on 28-10-2026. Pokémon and its artwork are © Nintendo, Creatures Inc. and GAME FREAK inc.
+- [premier-ball-premium.svg](premier-ball-premium.svg), shown on acquiring a new life
+  - This is derived from [pokeball.svg](pokeball.svg), heavily edited and refactored to yield a cleaner file by `lemon-gith` (GitHub username) and Claude Code: Opus 4.8 using VSCode v1.140.0
+- [premier-ball.svg](premier-ball.svg), shown at top symbolising a gained life
+  - This is just a trimmed version of [premier-ball-premium.svg](premier-ball-premium.svg), without the drop shadows

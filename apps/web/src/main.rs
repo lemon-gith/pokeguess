@@ -14,10 +14,16 @@ mod components;
 use components::game::{Game, SAVED_GAME_KEY, SavedGame};
 use components::menu::Menu;
 
-// v2: the lives rules, whose scores aren't comparable with the first version's
-const SETTINGS_KEY: &str = "pokeguess.settings.v2";
-const RUNS_KEY: &str = "pokeguess.runs.v2";
-const OLD_KEYS: [&str; 2] = ["pokeguess.settings", "pokeguess.runs"];
+// bumped when the rules change, since scores under different rules aren't
+// comparable (v3: balls and half lives)
+const SETTINGS_KEY: &str = "pokeguess.settings.v3";
+const RUNS_KEY: &str = "pokeguess.runs.v3";
+const OLD_KEYS: [&str; 4] = [
+    "pokeguess.settings",
+    "pokeguess.runs",
+    "pokeguess.settings.v2",
+    "pokeguess.runs.v2",
+];
 const CARD: &str = "box-border flex w-full flex-col bg-white/95 p-4 md:my-8 md:w-11/12 md:max-w-3xl md:rounded-xl md:p-8 md:shadow-lg md:outline md:outline-black/5";
 
 /// Runs kept in local storage; each mode's best runs are always kept.

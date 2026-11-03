@@ -16,10 +16,18 @@ pub struct RunRecord {
     pub id: String,
     pub mode: Mode,
     pub generations: Vec<u8>,
-    pub score: u32,
+    pub score: i32,
     pub caught: u32,
     /// Milliseconds since the Unix epoch.
     pub finished_at: f64,
+    #[serde(default)]
+    pub hints_bought: u32,
+    /// Times the player ran away.
+    #[serde(default)]
+    pub ran_away: u32,
+    /// Lives won back with Premier Balls, in halves.
+    #[serde(default)]
+    pub half_lives_regained: u32,
 }
 
 /// Better runs first: higher score, then the earlier of two equal scores.
@@ -66,14 +74,17 @@ pub fn add_run(runs: &mut Vec<RunRecord>, run: RunRecord, cap: usize) {
 mod tests {
     use super::*;
 
-    fn run(id: &str, mode: Mode, score: u32, finished_at: f64) -> RunRecord {
+    fn run(id: &str, mode: Mode, score: i32, finished_at: f64) -> RunRecord {
         RunRecord {
             id: id.into(),
             mode,
             generations: vec![1],
             score,
-            caught: score,
+            caught: score.unsigned_abs(),
             finished_at,
+            hints_bought: 0,
+            ran_away: 0,
+            half_lives_regained: 0,
         }
     }
 

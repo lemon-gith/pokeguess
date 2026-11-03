@@ -401,7 +401,10 @@ pub fn game(props: &GameProps) -> Html {
     };
     let suggestions = (!suggestions.is_empty()).then(|| {
         html! {
-            <div class="flex gap-2 overflow-x-auto pb-1" aria-label="Suggestions">
+            // scrolling sideways clips both ways, so the padding leaves room
+            // for the focus rings, and the negative margin keeps the chips
+            // lined up with the guess box
+            <div class="-m-1 flex gap-2 overflow-x-auto p-1" aria-label="Suggestions">
                 { for suggestions.iter().map(|entry| {
                     let name = entry.display_name.clone();
                     // back to the guess box, so Enter guesses it
@@ -419,7 +422,7 @@ pub fn game(props: &GameProps) -> Html {
                     html! {
                         <button
                             type="button"
-                            class="shrink-0 cursor-pointer rounded-full border-2 border-blue-200 bg-blue-50 px-3 py-1.5 text-sm hover:border-blue-400"
+                            class="shrink-0 cursor-pointer rounded-full border-2 border-blue-200 bg-blue-50 px-3 py-1.5 text-sm hover:border-blue-400 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-600"
                             // keep focus (and the keyboard) on the guess box
                             onpointerdown={Callback::from(|e: PointerEvent| e.prevent_default())}
                             {onclick}

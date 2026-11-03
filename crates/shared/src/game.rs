@@ -60,7 +60,7 @@ impl Mode {
     pub fn starting_lives(self) -> usize {
         match self {
             Mode::Easy => 5,
-            Mode::Normal | Mode::Hard | Mode::Expert => 3,
+            _ => 3,
         }
     }
 
@@ -68,8 +68,8 @@ impl Mode {
     /// entry: missing with the last one makes the Pokémon flee.
     pub fn catch_points(self) -> &'static [u32] {
         match self {
-            Mode::Easy | Mode::Normal | Mode::Hard => &[8, 5, 3, 2, 1],
             Mode::Expert => &[8, 5, 3],
+            _ => &[8, 5, 3, 2, 1],
         }
     }
 
@@ -81,7 +81,7 @@ impl Mode {
     pub fn flee_penalty(self) -> i32 {
         match self {
             Mode::Expert => 2,
-            Mode::Easy | Mode::Normal | Mode::Hard => 0,
+            _ => 0,
         }
     }
 
@@ -89,7 +89,7 @@ impl Mode {
     pub fn hint_cost(self) -> u32 {
         match self {
             Mode::Expert => 2,
-            Mode::Easy | Mode::Normal | Mode::Hard => 1,
+            _ => 1,
         }
     }
 

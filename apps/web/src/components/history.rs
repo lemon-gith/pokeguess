@@ -141,12 +141,11 @@ fn run_row(props: &RunRowProps) -> Html {
         ("Fled", run.fled.to_string()),
         ("Ran away", run.ran_away.to_string()),
         ("Hints", run.hints_bought.to_string()),
-        ("Premier Balls", run.premier_balls.to_string()),
-        (
-            "Lives won back",
-            (run.half_lives_regained as f32 / 2.0).to_string(),
-        ),
     ]);
+    // a surprise until one turns up
+    if run.premier_balls > 0 {
+        details.push(("Premier Balls", run.premier_balls.to_string()));
+    }
 
     html! {
         <li class="flex items-start gap-2 rounded-lg border border-gray-200 px-3 py-2">

@@ -303,12 +303,19 @@ pub fn game(props: &GameProps) -> Html {
         return html! { <p>{ "Something went wrong picking a Pokémon." }</p> };
     };
 
+    // where names are suggested, only a real name can be guessed, which
+    // catches typos; in the harder modes, spelling is up to the player
+    let can_guess = if mode.suggests_names() {
+        matching::find(&guess, &props.dex.pokemon, Language::English).is_some()
+    } else {
+        !guess.trim().is_empty()
+    };
     let onsubmit = {
         let state = state.clone();
         let guess = guess.clone();
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
-            if !guess.trim().is_empty() {
+            if can_guess {
                 state.dispatch(Action::Guess((*guess).clone()));
                 guess.set(String::new());
             }
@@ -397,10 +404,17 @@ pub fn game(props: &GameProps) -> Html {
             <div class="flex gap-2 overflow-x-auto pb-1" aria-label="Suggestions">
                 { for suggestions.iter().map(|entry| {
                     let name = entry.display_name.clone();
+                    // back to the guess box, so Enter guesses it
                     let onclick = {
                         let guess = guess.clone();
+                        let input = input.clone();
                         let name = name.clone();
-                        Callback::from(move |_| guess.set(name.clone()))
+                        Callback::from(move |_| {
+                            guess.set(name.clone());
+                            if let Some(input) = input.cast::<HtmlInputElement>() {
+                                let _ = input.focus();
+                            }
+                        })
                     };
                     html! {
                         <button
@@ -462,7 +476,10 @@ pub fn game(props: &GameProps) -> Html {
                             onclick={dispatch(&state, || Action::RunAway)}
                         />
                     </div>
-                    <form class="flex gap-2" {onsubmit}>
+                    // input, suggestions, then Guess, which is also the tab
+                    // order; the suggestions sit below the row, in space kept
+                    // for them, so they come and go without moving anything
+                    <form class="grid grid-cols-[minmax(0,1fr)_auto] gap-2" {onsubmit}>
                         <input
                             ref={input}
                             type="text"
@@ -473,11 +490,18 @@ pub fn game(props: &GameProps) -> Html {
                             enterkeyhint="go"
                             placeholder="Who's that Pokémon?"
                             aria-label="Your guess"
-                            class="min-w-0 flex-1 rounded-lg border-2 border-gray-300 px-3 py-2.5 text-base focus:border-blue-500 focus:outline-none"
+                            class="col-start-1 row-start-1 min-w-0 rounded-lg border-2 border-gray-300 px-3 py-2.5 text-base focus:border-blue-500 focus:outline-none"
                             value={(*guess).clone()}
                             {oninput}
                         />
-                        <button type="submit" class="cursor-pointer rounded-lg bg-blue-600 px-4 py-2.5 font-semibold text-white hover:bg-blue-700">
+                        if mode.suggests_names() {
+                            <div class="col-span-2 row-start-2 min-h-10">{ for suggestions }</div>
+                        }
+                        <button
+                            type="submit"
+                            class="col-start-2 row-start-1 cursor-pointer rounded-lg bg-blue-600 px-4 py-2.5 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                            disabled={!can_guess}
+                        >
                             { "Guess" }
                         </button>
                     </form>
@@ -603,7 +627,6 @@ pub fn game(props: &GameProps) -> Html {
                 { for feedback }
                 { for wrong_guesses }
                 { for balls }
-                { for suggestions }
                 { controls }
             </div>
         </div>

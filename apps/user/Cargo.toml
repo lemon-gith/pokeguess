@@ -6,11 +6,29 @@ publish.workspace = true
 
 [dependencies]
 shared = { path = "../../crates/shared" }
+argon2 = "0.5"
+axum = { version = "0.8", default-features = false, features = ["json", "tokio", "http1"] }
+base64 = "0.22"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-vercel_runtime = "2"
+sha2 = "0.10"
+sqlx = { version = "0.8", default-features = false, features = [
+    "macros",
+    "migrate",
+    "postgres",
+    "runtime-tokio",
+    "tls-rustls-ring-webpki",
+] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "set-header"] }
+vercel_runtime = { version = "2", features = ["axum"] }
 
-# Vercel deploys each handler as its own binary
+[dev-dependencies]
+http-body-util = "0.1"
+
+# Vercel deploys each handler as its own binary; this one serves every
+# /api/* path (see vercel.json)
 [[bin]]
-name = "health"
-path = "api/health.rs"
+name = "router"
+path = "api/router.rs"

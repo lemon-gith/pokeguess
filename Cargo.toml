@@ -16,3 +16,9 @@ publish = false
 [workspace.dependencies]
 # this is the development version of Yew
 yew = { git = "https://github.com/yewstack/yew/", features = ["csr"] }
+
+# password hashing is far too slow unoptimised, even in tests
+[profile.dev.package.argon2]
+opt-level = 3
+[profile.dev.package.blake2]
+opt-level = 3

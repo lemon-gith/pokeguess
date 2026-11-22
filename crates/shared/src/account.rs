@@ -76,7 +76,7 @@ pub fn validate_username(username: &str) -> Result<(), String> {
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
     {
-        return Err("Usernames can only use letters, numbers, _ and -.".into());
+        return Err("Usernames can only use letters, numbers, _ and -".into());
     }
     Ok(())
 }

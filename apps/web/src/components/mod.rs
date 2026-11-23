@@ -1,3 +1,4 @@
+pub mod account;
 pub mod clues;
 pub mod game;
 pub mod history;

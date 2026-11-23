@@ -9,9 +9,11 @@ use shared::runs::{RunRecord, save_run};
 use yew::platform::spawn_local;
 use yew::prelude::*;
 
+mod api;
 mod browser;
 mod components;
 
+use components::account::{self, Account};
 use components::game::{Game, SavedGame, Start};
 use components::menu::Menu;
 
@@ -163,6 +165,11 @@ fn app() -> Html {
         });
     }
     let runs = use_state(load_runs);
+    let account = use_state(|| Account::Checking);
+    {
+        let account = account.clone();
+        use_effect_with((), move |_| account::check(account));
+    }
     // pick up a game this tab was playing before a refresh
     let playing = use_state(|| {
         browser::load_session::<String>(CURRENT_GAME_KEY)
@@ -239,6 +246,8 @@ fn app() -> Html {
                         settings={stored_settings(dex)}
                         runs={(*runs).clone()}
                         resumable={load_games().into_keys().collect::<Vec<_>>()}
+                        account={(*account).clone()}
+                        on_account={let account = account.clone(); Callback::from(move |a| account.set(a))}
                         {on_start}
                         {on_resume}
                         {on_archive}

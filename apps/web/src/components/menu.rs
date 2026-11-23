@@ -2,6 +2,7 @@ use shared::game::{Mode, RunSettings};
 use shared::runs::RunRecord;
 use yew::prelude::*;
 
+use super::account::{Account, AccountButton, AccountPanel};
 use super::history::History;
 use super::leaderboard::Leaderboard;
 use crate::Dex;
@@ -17,6 +18,8 @@ pub struct MenuProps {
     pub on_start: Callback<RunSettings>,
     pub on_resume: Callback<String>,
     pub on_archive: Callback<(String, bool)>,
+    pub account: Account,
+    pub on_account: Callback<Account>,
 }
 
 const CHOICE: &str = "cursor-pointer rounded-lg border-2 px-3 py-2 transition";
@@ -26,6 +29,26 @@ const UNCHOSEN: &str = "border-gray-200 hover:border-gray-400";
 #[function_component(Menu)]
 pub fn menu(props: &MenuProps) -> Html {
     let settings = use_state(|| props.settings.clone());
+    let account_open = use_state(|| false);
+    let open_account = {
+        let account_open = account_open.clone();
+        Callback::from(move |()| account_open.set(true))
+    };
+    let close_account = {
+        let account_open = account_open.clone();
+        Callback::from(move |()| account_open.set(false))
+    };
+    // signing in is done once it works; the panel stays open otherwise
+    let on_account_change = {
+        let on_account = props.on_account.clone();
+        let account_open = account_open.clone();
+        Callback::from(move |account: Account| {
+            if matches!(account, Account::SignedIn(_)) {
+                account_open.set(false);
+            }
+            on_account.emit(account);
+        })
+    };
     let all_generations = props.dex.generations();
     let pool_size = settings.pool(&props.dex).len();
 
@@ -107,6 +130,12 @@ pub fn menu(props: &MenuProps) -> Html {
 
     html! {
         <div class="space-y-6">
+            <div class="-mb-4 flex justify-end">
+                <AccountButton account={props.account.clone()} onclick={open_account} />
+            </div>
+            if *account_open {
+                <AccountPanel account={props.account.clone()} on_change={on_account_change} on_close={close_account} />
+            }
             <header class="text-center">
                 <h1 class="text-4xl font-bold">{ "PokéGuess" }</h1>
                 <p class="text-gray-600">{ "Who's that Pokémon? Catch it with as few balls as you can: hints and running away cost lives. How many can you catch?" }</p>
